@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>项目拷问官 | 技术岗项目深挖训练器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">技术岗项目深挖训练器</p>
+        <h1>项目拷问官</h1>
+      </div>
+      <div class="status-strip" aria-label="训练状态">
+        <span id="sessionStatus">待开始</span>
+        <strong id="roundCounter">0 / 6</strong>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <aside class="setup-panel" aria-label="项目输入">
+        <div class="panel-head">
+          <h2>项目材料</h2>
+          <button class="ghost-button" id="loadSample" type="button" title="填入一段 RAG 项目示例">示例</button>
+        </div>
+
+        <label>
+          <span>技术方向</span>
+          <select id="track">
+            <option value="llm">大模型应用 / RAG / Agent</option>
+            <option value="backend">后端 / 工程系统</option>
+            <option value="algorithm">算法 / 机器学习</option>
+            <option value="data">数据 / 数据平台</option>
+            <option value="frontend">前端 / 客户端</option>
+          </select>
+        </label>
+
+        <label>
+          <span>面试强度</span>
+          <select id="intensity">
+            <option value="normal">普通技术面</option>
+            <option value="senior">深挖技术面</option>
+            <option value="pressure">压力拷问</option>
+          </select>
+        </label>
+
+        <label>
+          <span>岗位要求关键词（可选，不对准具体公司）</span>
+          <input id="jdKeywords" type="text" placeholder="例如：RAG、检索、服务稳定性、Python">
+        </label>
+
+        <label>
+          <span>简历项目描述</span>
+          <textarea id="projectText" rows="8" placeholder="粘贴你简历里的项目经历。写清背景、你负责的部分、技术栈、数据、指标、上线或实验结果。"></textarea>
+        </label>
+
+        <label>
+          <span>你最想被追问的点（可选）</span>
+          <input id="focusText" type="text" placeholder="例如：模型选择、指标设计、工程落地、伪代码">
+        </label>
+
+        <div class="button-row">
+          <button class="primary-button" id="startSession" type="button">开始拷问</button>
+          <button class="secondary-button" id="resetSession" type="button" title="清空当前训练状态">重置</button>
+        </div>
+      </aside>
+
+      <section class="main-panel" aria-label="面试训练区">
+        <nav class="tabs" aria-label="视图切换">
+          <button class="tab active" data-tab="interview" type="button">面试</button>
+          <button class="tab" data-tab="facts" type="button">事实卡</button>
+          <button class="tab" data-tab="report" type="button">报告</button>
+        </nav>
+
+        <div class="tab-view active" id="interviewView">
+          <div class="interview-board" id="chatLog">
+            <div class="empty-state">
+              <h2>把项目交给它，然后准备被追问。</h2>
+              <p>它会围绕真实性、方法选择、指标、工程落地、伪代码和前沿理解连续发问。</p>
+            </div>
+          </div>
+
+          <form class="answer-box" id="answerForm">
+            <textarea id="answerInput" rows="4" placeholder="先点击“开始拷问”。回答时尽量给出具体方案、指标、取舍和失败案例。" disabled></textarea>
+            <div class="answer-actions">
+              <span id="answerHint">回答越具体，诊断越准。</span>
+              <button class="primary-button" id="submitAnswer" type="submit" disabled>提交回答</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="tab-view" id="factsView">
+          <div class="fact-grid" id="factGrid">
+            <article>
+              <h3>项目事实卡</h3>
+              <p>开始后自动生成，用来模拟面试官读简历时抓重点的过程。</p>
+            </article>
+          </div>
+        </div>
+
+        <div class="tab-view" id="reportView">
+          <div class="report-panel" id="reportPanel">
+            <article>
+              <h3>抗拷问报告</h3>
+              <p>完成至少 3 轮回答后，会生成薄弱点、危险追问和下一轮训练建议。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <aside class="insight-panel" aria-label="即时诊断">
+        <div class="panel-head">
+          <h2>即时诊断</h2>
+          <span id="riskBadge">未评估</span>
+        </div>
+
+        <div class="score-stack" id="scoreStack">
+          <div class="score-row">
+            <span>真实性</span>
+            <meter min="0" max="10" value="0"></meter>
+            <strong>0</strong>
+          </div>
+          <div class="score-row">
+            <span>技术深度</span>
+            <meter min="0" max="10" value="0"></meter>
+            <strong>0</strong>
+          </div>
+          <div class="score-row">
+            <span>指标意识</span>
+            <meter min="0" max="10" value="0"></meter>
+            <strong>0</strong>
+          </div>
+          <div class="score-row">
+            <span>工程落地</span>
+            <meter min="0" max="10" value="0"></meter>
+            <strong>0</strong>
+          </div>
+        </div>
+
+        <div class="diagnosis-box">
+          <h3>最近一轮</h3>
+          <ul id="latestDiagnosis">
+            <li>还没有回答。开始后这里会显示哪里虚、哪里会被继续追。</li>
+          </ul>
+        </div>
+
+        <div class="diagnosis-box">
+          <h3>追问队列</h3>
+          <ol id="questionQueue">
+            <li>等待生成。</li>
+          </ol>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

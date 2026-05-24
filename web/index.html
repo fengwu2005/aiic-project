@@ -15,7 +15,7 @@
       </div>
       <div class="status-strip" aria-label="训练状态">
         <span id="sessionStatus">待开始</span>
-        <strong id="roundCounter">0 / 6</strong>
+        <strong><span id="roundCounter">0</span> 轮</strong>
       </div>
     </header>
 
@@ -23,17 +23,20 @@
       <aside class="setup-panel" aria-label="项目输入">
         <div class="panel-head">
           <h2>项目材料</h2>
-          <button class="ghost-button" id="loadSample" type="button" title="填入一段 RAG 项目示例">示例</button>
+          <button class="ghost-button" id="loadSample" type="button" title="填入一段通用技术项目示例">示例</button>
         </div>
 
         <label>
           <span>技术方向</span>
           <select id="track">
-            <option value="llm">大模型应用 / RAG / Agent</option>
+            <option value="general">通用技术项目</option>
+            <option value="code">软件工程 / 代码项目</option>
+            <option value="ai">AI / 智能系统</option>
             <option value="backend">后端 / 工程系统</option>
             <option value="algorithm">算法 / 机器学习</option>
             <option value="data">数据 / 数据平台</option>
             <option value="frontend">前端 / 客户端</option>
+            <option value="infra">基础设施 / DevOps</option>
           </select>
         </label>
 
@@ -47,8 +50,16 @@
         </label>
 
         <label>
+          <span>反馈模式</span>
+          <select id="feedbackMode">
+            <option value="realtime">实时看到反馈</option>
+            <option value="final">结束后总体反馈</option>
+          </select>
+        </label>
+
+        <label>
           <span>岗位要求关键词（可选，不对准具体公司）</span>
-          <input id="jdKeywords" type="text" placeholder="例如：RAG、检索、服务稳定性、Python">
+          <input id="jdKeywords" type="text" placeholder="例如：代码质量、服务稳定性、模型评估、Python">
         </label>
 
         <label>
@@ -58,7 +69,7 @@
 
         <label>
           <span>你最想被追问的点（可选）</span>
-          <input id="focusText" type="text" placeholder="例如：模型选择、指标设计、工程落地、伪代码">
+          <input id="focusText" type="text" placeholder="例如：代码实现、指标设计、工程落地、行业趋势">
         </label>
 
         <div class="button-row">
@@ -78,7 +89,7 @@
           <div class="interview-board" id="chatLog">
             <div class="empty-state">
               <h2>把项目交给它，然后准备被追问。</h2>
-              <p>它会围绕真实性、方法选择、指标、工程落地、伪代码和前沿理解连续发问。</p>
+              <p>它会围绕真实性、代码实现、方法选择、指标、工程落地、行业趋势连续发问。</p>
             </div>
           </div>
 
@@ -95,7 +106,8 @@
           <div class="fact-grid" id="factGrid">
             <article>
               <h3>项目事实卡</h3>
-              <p>开始后自动生成，用来模拟面试官读简历时抓重点的过程。</p>
+              <p>事实卡是面试官读你项目材料时的“草稿纸”：它会拆出你的个人贡献、技术路线、数据指标、工程落地和行业场景缺口，用来决定下一步该追哪里。</p>
+              <p>它不是最终评价，而是为了让追问更像真实面试官读简历后的判断。</p>
             </article>
           </div>
         </div>
@@ -104,7 +116,8 @@
           <div class="report-panel" id="reportPanel">
             <article>
               <h3>抗拷问报告</h3>
-              <p>完成至少 3 轮回答后，会生成薄弱点、危险追问和下一轮训练建议。</p>
+              <p>报告是训练结束后的复盘：汇总每轮问题分析、你的回答分析、暴露痛点、改进建议和示例回答。</p>
+              <p>它的作用是告诉你这个项目哪里最容易被问穿，以及下一轮应该优先补哪块。</p>
             </article>
           </div>
         </div>
@@ -137,6 +150,11 @@
             <meter min="0" max="10" value="0"></meter>
             <strong>0</strong>
           </div>
+          <div class="score-row">
+            <span>趋势判断</span>
+            <meter min="0" max="10" value="0"></meter>
+            <strong>0</strong>
+          </div>
         </div>
 
         <div class="diagnosis-box">
@@ -147,10 +165,10 @@
         </div>
 
         <div class="diagnosis-box">
-          <h3>追问队列</h3>
-          <ol id="questionQueue">
-            <li>等待生成。</li>
-          </ol>
+          <h3>当前追问</h3>
+          <div id="currentQuestionBox" class="current-question-box">
+            <p>等待开始。</p>
+          </div>
         </div>
       </aside>
     </section>

@@ -380,6 +380,50 @@ textarea:focus {
   line-height: 1.7;
 }
 
+.current-question-box p {
+  margin-bottom: 12px;
+  color: #2f3e36;
+  line-height: 1.7;
+}
+
+.time-limit {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.time-limit span {
+  color: var(--muted);
+}
+
+.pressure-meter {
+  height: 7px;
+  overflow: hidden;
+  background: #e7ece8;
+  border: 1px solid var(--line);
+  margin: 10px 0 6px;
+}
+
+.pressure-meter span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--green);
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.pressure-meter span.pressure-hot {
+  background: var(--amber);
+}
+
+.time-over {
+  color: var(--red);
+}
+
 .report-panel {
   grid-template-columns: 1fr;
 }
@@ -466,6 +510,17 @@ meter {
 .warning {
   border-color: #f0d4aa;
   background: var(--amber-2);
+}
+
+.feedback-item {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.feedback-item p {
+  margin-bottom: 8px;
+  line-height: 1.65;
 }
 
 @media (max-width: 1180px) {

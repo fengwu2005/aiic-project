@@ -126,6 +126,14 @@ h3 {
   padding: 18px;
 }
 
+.setup-panel,
+.insight-panel {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
@@ -181,11 +189,43 @@ h3 {
   padding-top: 16px;
 }
 
+.history-box summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.history-box summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-box summary span {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.history-box summary::before {
+  content: "▸";
+  color: var(--green);
+  font-size: 14px;
+  transition: transform 0.18s ease;
+}
+
+.history-box[open] summary::before {
+  transform: rotate(90deg);
+}
+
 .history-box ul {
   display: grid;
   gap: 8px;
   list-style: none;
-  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  margin: 12px 0 0;
   padding: 0;
 }
 
@@ -259,6 +299,14 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(23, 107, 77, 0.12);
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  color: #7c8881;
+  background: #edf1ee;
+}
+
 .button-row,
 .answer-actions {
   display: flex;
@@ -320,7 +368,8 @@ textarea:focus {
 }
 
 .main-panel {
-  min-height: calc(100vh - 132px);
+  height: calc(100vh - 132px);
+  min-height: 680px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -328,7 +377,7 @@ textarea:focus {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
@@ -358,14 +407,17 @@ textarea:focus {
 
 #interviewView.active {
   display: flex;
-  min-height: calc(100vh - 173px);
+  min-height: 0;
+  height: 100%;
   flex-direction: column;
 }
 
 .interview-board {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 18px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .empty-state {
@@ -386,7 +438,8 @@ textarea:focus {
 
 .empty-state p,
 .fact-grid p,
-.report-panel p {
+.report-panel p,
+.help-panel p {
   color: var(--muted);
   line-height: 1.7;
 }
@@ -430,6 +483,7 @@ textarea:focus {
 }
 
 .answer-box {
+  flex: 0 0 auto;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
   padding: 14px;
@@ -450,19 +504,40 @@ textarea:focus {
   font-size: 13px;
 }
 
+.submit-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f0b8b8;
+  background: var(--red-2);
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.submit-error button {
+  flex: 0 0 auto;
+}
+
 .fact-grid,
-.report-panel {
+.report-panel,
+.help-panel {
   padding: 18px;
   display: grid;
   gap: 14px;
 }
 
-.fact-grid {
+.fact-grid,
+.help-panel {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .fact-grid article,
 .report-panel article,
+.help-panel article,
 .diagnosis-box {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -473,14 +548,53 @@ textarea:focus {
   grid-column: 1 / -1;
 }
 
+.quick-start {
+  border-color: #badfcd !important;
+  background: #f7fcf9 !important;
+}
+
+.quick-start h3 {
+  color: var(--green);
+}
+
 .fact-grid ul,
 .report-panel ul,
+.help-panel ul,
+.help-panel ol,
 .diagnosis-box ul,
 .diagnosis-box ol {
   margin: 0;
   padding-left: 18px;
   color: #2f3e36;
   line-height: 1.7;
+}
+
+.help-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.help-metric-grid div {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 12px;
+}
+
+.help-metric-grid strong,
+.help-metric-grid span {
+  display: block;
+}
+
+.help-metric-grid strong {
+  color: var(--green);
+  margin-bottom: 6px;
+}
+
+.help-metric-grid span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .current-question-box p {
@@ -492,6 +606,7 @@ textarea:focus {
 .time-limit {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   margin-top: 8px;
   padding-top: 8px;
@@ -499,16 +614,34 @@ textarea:focus {
   font-size: 13px;
 }
 
+.time-limit:last-child {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #badfcd;
+  background: var(--green-2);
+}
+
 .time-limit span {
   color: var(--muted);
 }
 
+.time-limit strong {
+  color: var(--ink);
+}
+
+.time-limit:last-child strong {
+  color: var(--green);
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 .pressure-meter {
-  height: 7px;
+  height: 10px;
   overflow: hidden;
   background: #e7ece8;
   border: 1px solid var(--line);
-  margin: 10px 0 6px;
+  margin: 12px 0 8px;
 }
 
 .pressure-meter span {
@@ -524,7 +657,11 @@ textarea:focus {
 }
 
 .time-over {
-  color: var(--red);
+  color: var(--red) !important;
+}
+
+.time-warning {
+  color: var(--amber) !important;
 }
 
 .report-panel {
@@ -595,9 +732,23 @@ meter {
   gap: 10px;
 }
 
+.product-metric-grid,
+.evidence-chain {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .metric {
   background: var(--surface-2);
   border: 1px solid var(--line);
+  padding: 12px;
+}
+
+.product-metric-grid div,
+.evidence-chain div {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   padding: 12px;
 }
 
@@ -607,9 +758,51 @@ meter {
   color: var(--green);
 }
 
+.product-metric-grid strong {
+  display: block;
+  color: var(--green);
+  font-size: 22px;
+}
+
+.evidence-chain strong {
+  display: block;
+  color: #24312b;
+  line-height: 1.55;
+}
+
 .metric span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.product-metric-grid span,
+.evidence-chain span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.product-metric-grid small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.evidence-chain ul {
+  margin: 0;
+  padding-left: 17px;
+}
+
+.trend-card .pill-list {
+  margin: 10px 0;
+}
+
+.probe-line {
+  margin-bottom: 0;
+  color: #2f3e36 !important;
 }
 
 .danger {
@@ -667,8 +860,15 @@ meter {
     grid-template-columns: minmax(280px, 360px) 1fr;
   }
 
+  .setup-panel {
+    position: static;
+    max-height: none;
+  }
+
   .insight-panel {
     grid-column: 1 / -1;
+    position: static;
+    max-height: none;
   }
 }
 
@@ -692,15 +892,26 @@ meter {
   }
 
   .main-panel {
+    height: auto;
     min-height: auto;
   }
 
   #interviewView.active {
+    height: 720px;
     min-height: 620px;
   }
 
+  .history-box ul {
+    max-height: 220px;
+  }
+
   .fact-grid,
-  .metric-grid {
+  .help-panel,
+  .help-metric-grid,
+  .product-metric-grid,
+  .evidence-chain,
+  .metric-grid,
+  .round-score-grid {
     grid-template-columns: 1fr;
   }
 }

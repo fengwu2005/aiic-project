@@ -9,6 +9,8 @@ const state = {
   activeDeadline: null,
   timerId: null,
   feedbackMode: "realtime",
+  intensity: "normal",
+  interviewerStyle: "mixed",
   feedbackItems: [],
   scores: {
     authenticity: 0,
@@ -32,7 +34,9 @@ const state = {
   sessionId: null,
   sessionTitle: "",
   history: [],
-  streamBuffer: ""
+  streamBuffer: "",
+  isSubmitting: false,
+  pendingSubmit: null
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -341,6 +345,19 @@ function makeSessionTitle(projectText) {
   return projectText.replace(/\s+/g, " ").slice(0, 28) || "新的项目拷问";
 }
 
+function syncLiveOptions() {
+  state.intensity = $("#intensity").value;
+  state.interviewerStyle = $("#interviewerStyle").value;
+  state.feedbackMode = $("#feedbackMode").value;
+}
+
+function setLockedProjectInputs(locked) {
+  ["track", "jdKeywords", "projectText", "focusText"].forEach((id) => {
+    $(`#${id}`).disabled = locked;
+  });
+  $("#loadSample").disabled = locked;
+}
+
 function sanitize(text) {
   return text.replace(/[<>&]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
 }
@@ -380,7 +397,101 @@ function extractFacts(projectText, track, jdKeywords, focusText) {
     jdTerms,
     focusTerms,
     checks: { hasMetric, hasRole, hasData, hasDeployment, hasIndustry },
-    riskPoints
+    riskPoints,
+    evidenceChain: buildEvidenceChain(projectText, track, { hasMetric, hasRole, hasData, hasDeployment, hasIndustry }),
+    trendCard: buildTrendCard(projectText, track, { hasMetric, hasDeployment, hasIndustry })
+  };
+}
+
+function buildEvidenceChain(projectText, track, checks) {
+  const profile = trackProfiles[track];
+  const projectClaim = extractProjectClaim(projectText, profile.label);
+  const proofItems = [];
+  const riskItems = [];
+
+  if (checks.hasRole) {
+    proofItems.push("个人负责范围、模块边界、关键代码或实验脚本");
+  } else {
+    proofItems.push("需要补：你本人到底负责哪一层、哪几个文件/脚本/模块");
+    riskItems.push("个人贡献边界不清，容易被质疑只是参与或包装");
+  }
+  if (checks.hasData) {
+    proofItems.push("数据来源、样本构成、质量控制和失败样本");
+  } else {
+    proofItems.push("需要补：数据从哪里来、是否可靠、有没有坏样本");
+    riskItems.push("数据可信度不足，指标和结论会被追问");
+  }
+  if (checks.hasMetric) {
+    proofItems.push("核心指标、baseline、实验/线上观测和误差分析");
+  } else {
+    proofItems.push("需要补：用什么指标证明项目有效，和 baseline 怎么比");
+    riskItems.push("没有量化证据，项目价值容易停留在 demo");
+  }
+  if (checks.hasDeployment) {
+    proofItems.push("部署链路、日志监控、异常处理、成本和回滚");
+  } else {
+    riskItems.push("工程闭环不足，真实落地会被追稳定性和成本");
+  }
+
+  if (/vlm|robot|机器人|机械臂|多模态|视觉语言/i.test(projectText)) {
+    riskItems.push("VLM/机器人项目要额外证明 sim-to-real gap、动作安全和闭环成功率");
+  }
+  if (/大模型|llm|agent|rag|prompt|模型/i.test(projectText)) {
+    riskItems.push("AI 项目要证明不是只调 API：输入输出、后处理、评估和兜底必须说清");
+  }
+
+  return {
+    claim: projectClaim,
+    proofItems: proofItems.slice(0, 4),
+    riskItems: [...new Set(riskItems)].slice(0, 4)
+  };
+}
+
+function extractProjectClaim(projectText, fallbackLabel) {
+  const compact = projectText.replace(/\s+/g, " ").trim();
+  const firstSentence = compact.split(/[。！？!?；;]/)[0] || compact;
+  if (firstSentence.length >= 12) return firstSentence.slice(0, 80);
+  return `这是一个${fallbackLabel}项目，需要证明个人贡献、技术方案和结果有效。`;
+}
+
+function buildTrendCard(projectText, track, checks) {
+  const lower = projectText.toLowerCase();
+  let scenario = "真实企业落地场景";
+  let timing = "效率、成本和可靠性要求提高，使这个问题值得被重新做一遍";
+  let enterpriseFocus = ["成本", "可靠性", "部署复杂度", "安全合规", "ROI"];
+  let probe = "如果把这个项目放到真实企业里，第一个影响 ROI 的约束是什么？";
+
+  if (/vlm|robot|机器人|机械臂|多模态|视觉语言/i.test(projectText)) {
+    scenario = "机器人和具身智能落地场景";
+    timing = "VLM、多模态感知和低成本硬件推进了自然语言控制机器人，但 sim-to-real、延迟和安全仍是瓶颈";
+    enterpriseFocus = ["任务成功率", "动作安全", "推理延迟", "场景泛化", "人工接管成本"];
+    probe = "为什么现在 VLM 机器人值得做？真实部署时你会先压成功率、延迟、安全还是人工接管成本？";
+  } else if (/大模型|llm|agent|rag|prompt|模型/i.test(projectText)) {
+    scenario = "AI 应用落地场景";
+    timing = "大模型能力增强后，企业更关心稳定性、成本、数据边界和可控性，而不只是 demo 效果";
+    enterpriseFocus = ["准确性", "稳定性", "调用成本", "数据安全", "人工兜底"];
+    probe = "这个 AI 能力为什么现在适合落地？如果模型成本或错误率上升，你的方案怎么调整？";
+  } else if (track === "backend" || /服务|接口|数据库|缓存|并发|队列/.test(projectText)) {
+    scenario = "业务系统工程化场景";
+    timing = "业务增长后，稳定性、可观测性和成本控制比单点功能更关键";
+    enterpriseFocus = ["稳定性", "延迟", "扩展性", "数据一致性", "运维成本"];
+    probe = "如果业务量增长 10 倍，企业会先关心稳定性、延迟、成本还是一致性？你怎么证明？";
+  } else if (track === "frontend" || /前端|组件|页面|交互|渲染/.test(projectText)) {
+    scenario = "用户体验和前端工程场景";
+    timing = "产品体验竞争加剧，前端不只交付页面，还要负责性能、可观测性和转化效率";
+    enterpriseFocus = ["首屏性能", "交互稳定性", "转化率", "埋点质量", "异常恢复"];
+    probe = "这个前端项目对业务体验的核心贡献是什么？你怎么证明不是只做了页面？";
+  }
+
+  if (!checks.hasIndustry) {
+    enterpriseFocus.unshift("业务价值");
+  }
+
+  return {
+    scenario,
+    timing,
+    enterpriseFocus: [...new Set(enterpriseFocus)].slice(0, 5),
+    probe
   };
 }
 
@@ -407,10 +518,24 @@ function buildQuestions(track, intensity, facts) {
 
   const unique = [...new Set(selected)];
   if (intensity === "pressure") {
-    unique.splice(1, 0, "我先质疑一下：这个项目听起来像把现成框架串起来。你的技术判断体现在哪里？");
+    unique.splice(
+      1,
+      0,
+      "我先质疑一下：你这段项目描述听起来更像把现成组件串起来。请你拿一个最能证明是你亲手做的证据出来，具体到代码路径、参数选择或排查记录。",
+      "如果我认为这个项目有包装嫌疑，你会用哪一个失败案例证明你真的做过？不要讲结果，讲当时哪里出错、你怎么定位。",
+      "你刚才说的方案里，哪一个假设最脆弱？如果这个假设不成立，系统会怎么坏？"
+    );
   }
   if (intensity === "senior") {
-    unique.splice(2, 0, "请讲一个你做过的关键 trade-off：你牺牲了什么，换来了什么？");
+    unique.splice(
+      2,
+      0,
+      "请讲一个你做过的关键取舍：你牺牲了什么，换来了什么？最好带上当时的指标或约束。",
+      "你这个方案如果放到真实线上环境，第一个瓶颈会在哪里？你怎么验证过？"
+    );
+  }
+  if (intensity === "normal") {
+    unique.splice(1, 0, "我们先把事实对齐：这个项目里你本人负责的范围是什么，团队其他人负责什么？");
   }
   return normalizeQuestions(unique);
 }
@@ -431,6 +556,40 @@ function normalizeFeedback(feedback, fallbackDiagnosis = []) {
   };
 }
 
+function buildPressureDecision(relevance, scores, diagnosis, answer, question) {
+  const average = scoreAverage(scores);
+  const shortOrVague = answer.length < 120 || diagnosis.some((item) => /偏短|缺少|不足|不够|没有/.test(item));
+  const coreQuestion = limitText(question || "刚才的问题", 120);
+  if (relevance.score <= 4) {
+    return {
+      level: "重答",
+      action: "repeat",
+      label: "跑题重答",
+      reason: relevance.evidence || "回答没有对准本轮问题",
+      nextQuestion: `我先打断一下，这个回答没有对上我刚才问的点。刚才的问题是：${coreQuestion} 请不要展开其他准备稿，先正面回答这一点：${relevance.evidence || "你漏掉了本轮核心追问"}。`,
+      timeLimitSeconds: 75
+    };
+  }
+  if (average >= 7 && !shortOrVague) {
+    return {
+      level: "加压",
+      action: "deepen",
+      label: "回答扎实，追更深",
+      reason: "本轮有一定证据，可以继续追边界、成本、失败案例或行业约束",
+      nextQuestion: "",
+      timeLimitSeconds: 120
+    };
+  }
+  return {
+    level: "收窄",
+    action: "narrow",
+    label: "回答偏虚，收窄到证据",
+    reason: diagnosis[0] || "回答还缺少可验证证据",
+    nextQuestion: `我先把刚才的问题收窄。请只给一个最具体的证据：${diagnosis[0] || "你本人做过的代码路径、数据来源或指标"}。`,
+    timeLimitSeconds: 90
+  };
+}
+
 function normalizeAssessment(value, fallback) {
   const source = value || {};
   return {
@@ -448,6 +607,7 @@ function limitText(text, maxLength) {
 function renderLatestFeedback(feedback) {
   if (state.feedbackMode !== "realtime") return;
   const parts = [
+    ["压力阶梯", `${feedback.pressure_decision?.label || "正常追问"}${feedback.pressure_decision?.reason ? `：${feedback.pressure_decision.reason}` : ""}`],
     ["是否答到问题", `${feedback.answer_relevance.verdict}${feedback.answer_relevance.evidence ? `：${feedback.answer_relevance.evidence}` : ""}`],
     ["问题分析", feedback.question_analysis],
     ["回答分析", feedback.answer_analysis],
@@ -480,25 +640,80 @@ function scoreAnswer(answer) {
 }
 
 function scoreTimeEfficiency(elapsedSeconds, limitSeconds, answer) {
-  if (!elapsedSeconds || !limitSeconds) return 7;
-  const ratio = elapsedSeconds / limitSeconds;
+  const timeStats = computeTimeStats(elapsedSeconds, limitSeconds, answer);
+  if (!timeStats.limitSeconds) return 7;
+  const ratio = timeStats.effectiveSeconds / timeStats.limitSeconds;
   const tooShort = answer.length < 80;
   if (ratio <= 0.35 && tooShort) return 4;
   if (ratio <= 0.75) return 9;
   if (ratio <= 1) return 8;
-  if (ratio <= 1.2) return 6;
-  if (ratio <= 1.5) return 4;
+  if (ratio <= 1.15) return 6;
+  if (ratio <= 1.35) return 5;
+  if (ratio <= 1.6) return 3;
   return 2;
 }
 
+function estimateSpokenSeconds(answer) {
+  const value = String(answer || "").trim();
+  if (!value) return 0;
+  const chineseChars = (value.match(/[\u4e00-\u9fa5]/g) || []).length;
+  const latinWords = (value.replace(/[\u4e00-\u9fa5]/g, " ").match(/[a-zA-Z0-9_+.%/-]+/g) || []).length;
+  const punctuationPauses = (value.match(/[。！？!?；;：:\n]/g) || []).length;
+  const chineseSeconds = chineseChars / 4.2;
+  const latinSeconds = latinWords / 2.4;
+  const pauseSeconds = Math.min(18, punctuationPauses * 0.55);
+  return Math.max(1, Math.round(chineseSeconds + latinSeconds + pauseSeconds));
+}
+
+function computeTimeStats(elapsedSeconds, limitSeconds, answer) {
+  const actualSeconds = Math.max(0, Math.round(Number(elapsedSeconds) || 0));
+  const safeLimit = Math.max(0, Math.round(Number(limitSeconds) || 0));
+  const estimatedSpokenSeconds = estimateSpokenSeconds(answer);
+  const effectiveSeconds = Math.max(actualSeconds, estimatedSpokenSeconds);
+  const overtimeSeconds = safeLimit ? Math.max(0, effectiveSeconds - safeLimit) : 0;
+  const ratio = safeLimit ? effectiveSeconds / safeLimit : 0;
+  return {
+    actualSeconds,
+    estimatedSpokenSeconds,
+    effectiveSeconds,
+    limitSeconds: safeLimit,
+    overtimeSeconds,
+    ratio
+  };
+}
+
 function timeEfficiencyNote(elapsedSeconds, limitSeconds) {
-  if (!elapsedSeconds || !limitSeconds) return "未记录实际答题时长。";
-  const ratio = elapsedSeconds / limitSeconds;
-  if (ratio <= 0.35) return "回答很快，若信息不足会显得没有展开。";
-  if (ratio <= 1) return "答题节奏基本合适。";
-  if (ratio <= 1.2) return "略超建议时长，真实面试中需要更快收束。";
-  if (ratio <= 1.5) return "明显超时，容易影响面试官耐心和追问节奏。";
+  const timeStats = computeTimeStats(elapsedSeconds, limitSeconds, "");
+  if (!timeStats.actualSeconds || !timeStats.limitSeconds) return "未记录实际答题时长。";
+  if (timeStats.ratio <= 0.35) return "回答很快，若信息不足会显得没有展开。";
+  if (timeStats.ratio <= 1) return "答题节奏基本合适。";
+  if (timeStats.ratio <= 1.15) return `略超建议时长 ${formatDuration(timeStats.overtimeSeconds)}，真实面试中需要更快收束。`;
+  if (timeStats.ratio <= 1.6) return `明显超时 ${formatDuration(timeStats.overtimeSeconds)}，容易影响面试官耐心和追问节奏。`;
   return "严重超时，真实面试中会显著扣分。";
+}
+
+function timeEfficiencyNoteFromStats(timeStats) {
+  if (!timeStats?.limitSeconds) return "未记录时间信息。";
+  const basis = timeStats.estimatedSpokenSeconds > timeStats.actualSeconds
+    ? `按文本长度估算口述约 ${formatDuration(timeStats.estimatedSpokenSeconds)}`
+    : `实际用时 ${formatDuration(timeStats.actualSeconds)}`;
+  if (timeStats.ratio <= 0.35) return `${basis}，回答偏短；如果信息不足，会显得没有展开。`;
+  if (timeStats.ratio <= 1) return `${basis}，节奏基本合适。`;
+  if (timeStats.ratio <= 1.15) return `${basis}，超出建议时长 ${formatDuration(timeStats.overtimeSeconds)}，需要更快收束。`;
+  if (timeStats.ratio <= 1.6) return `${basis}，明显超时 ${formatDuration(timeStats.overtimeSeconds)}，真实面试中会被扣表达效率。`;
+  return `${basis}，严重超时 ${formatDuration(timeStats.overtimeSeconds)}，真实面试中会显著影响追问节奏。`;
+}
+
+function normalizeTimeStats(item) {
+  const stats = item.timeStats || computeTimeStats(item.elapsedSeconds, item.timeLimitSeconds, item.answer || "");
+  return {
+    actualSeconds: Number(stats.actualSeconds) || 0,
+    estimatedSpokenSeconds: Number(stats.estimatedSpokenSeconds) || 0,
+    effectiveSeconds: Number(stats.effectiveSeconds) || 0,
+    limitSeconds: Number(stats.limitSeconds) || Number(item.timeLimitSeconds) || 0,
+    overtimeSeconds: Number(stats.overtimeSeconds) || 0,
+    ratio: Number(stats.ratio) || 0
+  };
 }
 
 function diagnoseAnswer(answer, question) {
@@ -595,6 +810,122 @@ function scoreAverage(scores) {
   return Math.round(values.reduce((sum, item) => sum + Number(item || 0), 0) / values.length);
 }
 
+function average(values) {
+  const clean = values.map(Number).filter((item) => Number.isFinite(item));
+  if (!clean.length) return 0;
+  return Math.round(clean.reduce((sum, item) => sum + item, 0) / clean.length);
+}
+
+function computeQuestionProjectRelevance(item, index) {
+  const question = item.question || "";
+  const projectText = $("#projectText").value || state.facts?.evidenceChain?.claim || "";
+  const projectTokens = new Set([
+    ...importantTokens(projectText),
+    ...(state.facts?.matchedTerms || []).map((term) => term.toLowerCase()),
+    ...(state.facts?.jdTerms || []),
+    ...(state.facts?.focusTerms || [])
+  ].filter(Boolean));
+  const questionTokens = importantTokens(question);
+  const overlapCount = questionTokens.filter((token) => projectTokens.has(token)).length;
+  let score = Math.min(6, 3 + overlapCount);
+
+  if (/代码|实现|伪代码|模块|链路|接口|函数|脚本/.test(question) && state.facts?.checks?.hasRole) score += 1;
+  if (/指标|评估|baseline|实验|压测|证明|效果/.test(question)) score += 1;
+  if (/失败|风险|边界|异常|兜底|回滚|瓶颈/.test(question)) score += 1;
+  if (/行业|企业|业务|场景|趋势|成本|合规|部署|ROI|可靠/.test(question)) score += 1;
+
+  const previousAnswer = index > 0 ? state.feedbackItems[index - 1]?.answer || "" : "";
+  if (previousAnswer) {
+    const previousTokens = new Set(importantTokens(previousAnswer));
+    const carried = questionTokens.some((token) => previousTokens.has(token));
+    if (carried) score += 1;
+  }
+
+  return Math.max(1, Math.min(10, score));
+}
+
+function computeProductMetrics() {
+  const items = state.feedbackItems || [];
+  if (!items.length) {
+    return {
+      questionRelevance: 0,
+      probeDepth: 0,
+      diagnosisAccuracy: 0,
+      trainingGain: 0,
+      reviewValue: 0
+    };
+  }
+
+  const questionRelevance = average(items.map((item, index) => computeQuestionProjectRelevance(item, index)));
+  const probeDepth = average(items.map((item) => {
+    const text = `${item.question || ""} ${item.question_analysis || ""}`;
+    let score = 3;
+    if (/代码|实现|伪代码|模块|链路|数据来源|指标|baseline|失败|边界|成本|可靠|合规|ROI|部署/.test(text)) score += 4;
+    if (item.pressure_decision?.action === "deepen") score += 2;
+    if (item.pressure_decision?.action === "narrow") score += 1;
+    return Math.min(10, score);
+  }));
+  const diagnosisAccuracy = average(items.map((item) => {
+    const text = `${item.answer_analysis || ""} ${item.pain_point || ""} ${item.improvement || ""}`;
+    let score = 4;
+    if (item.answer_relevance?.score <= 5 && /没|漏|缺|没有|不够|跑题|没对上/.test(text)) score += 3;
+    if (/指标|个人贡献|代码|实现|数据|工程|行业|时间|超时/.test(text)) score += 2;
+    return Math.min(10, score);
+  }));
+  const trainingGain = computeTrainingGain(items);
+  const reviewValue = average(items.map((item) => {
+    let score = 3;
+    if ((item.improvement || "").length >= 24) score += 3;
+    if ((item.sample_answer || "").length >= 80) score += 3;
+    if (/代码|指标|数据|失败|部署|成本|行业|结论/.test(`${item.improvement || ""} ${item.sample_answer || ""}`)) score += 1;
+    return Math.min(10, score);
+  }));
+
+  return { questionRelevance, probeDepth, diagnosisAccuracy, trainingGain, reviewValue };
+}
+
+function computeTrainingGain(items) {
+  const repeatPairs = [];
+  for (let i = 1; i < items.length; i += 1) {
+    if (items[i - 1].pressure_decision?.action === "repeat") {
+      repeatPairs.push((items[i].averageScore || 0) - (items[i - 1].averageScore || 0));
+    }
+  }
+  if (repeatPairs.length) {
+    return Math.max(0, Math.min(10, 5 + Math.round(average(repeatPairs) / 2)));
+  }
+  if (items.length < 2) return 0;
+  const first = items[0].averageScore || 0;
+  const last = items[items.length - 1].averageScore || 0;
+  return Math.max(0, Math.min(10, 5 + last - first));
+}
+
+function renderProductMetrics() {
+  const metrics = computeProductMetrics();
+  const rows = [
+    ["问题相关度", metrics.questionRelevance, "追问是否紧扣项目和上轮回答"],
+    ["追问深度", metrics.probeDepth, "是否追到代码、指标、失败和边界"],
+    ["诊断准确度", metrics.diagnosisAccuracy, "是否识别跑题、空话和缺证据"],
+    ["训练增益", metrics.trainingGain, "重答或后续回答是否变强"],
+    ["复盘价值", metrics.reviewValue, "建议能否直接改回答和简历"]
+  ];
+  return `
+    <article>
+      <h3>训练有效性</h3>
+      <p>这组指标衡量工具本身有没有帮你练到点上，不是候选人能力分。</p>
+      <div class="product-metric-grid">
+        ${rows.map(([label, value, desc]) => `
+          <div>
+            <strong>${value}</strong>
+            <span>${label}</span>
+            <small>${desc}</small>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
 function renderScoreMini(scores) {
   const rows = [
     ["authenticity", "真实性"],
@@ -623,11 +954,38 @@ function renderFacts() {
   if (!facts) return;
 
   const riskClass = facts.riskPoints.length >= 3 ? "danger" : facts.riskPoints.length ? "warning" : "";
+  const chain = facts.evidenceChain || { claim: "待补充项目主张", proofItems: [], riskItems: [] };
+  const trend = facts.trendCard || { scenario: "真实企业落地场景", timing: "待补充行业发展脉络", enterpriseFocus: [], probe: "这个项目为什么现在值得做？" };
   grid.innerHTML = `
     <article class="wide-card">
       <h3>这张事实卡怎么用</h3>
       <p>事实卡相当于面试官读完项目后的“抓漏洞清单”。它不会给最终分，而是告诉你：你的材料目前更像哪个技术方向、哪些关键词能支撑岗位匹配、哪些关键信息没写清，以及第一轮应该优先被追问什么。</p>
       <p>如果这里显示缺少指标、数据来源、工程落地或行业场景，后面的追问会优先围绕这些缺口展开。</p>
+    </article>
+    <article class="wide-card">
+      <h3>证据链拷问图</h3>
+      <div class="evidence-chain">
+        <div>
+          <span>主张</span>
+          <strong>${sanitize(chain.claim)}</strong>
+        </div>
+        <div>
+          <span>需要证据</span>
+          <ul>${(chain.proofItems.length ? chain.proofItems : ["个人贡献、实现细节、指标和失败样本"]).map((item) => `<li>${sanitize(item)}</li>`).join("")}</ul>
+        </div>
+        <div>
+          <span>风险点</span>
+          <ul>${(chain.riskItems.length ? chain.riskItems : ["当前主张比较完整，后续会继续追边界和反例。"]).map((item) => `<li>${sanitize(item)}</li>`).join("")}</ul>
+        </div>
+      </div>
+    </article>
+    <article class="wide-card trend-card">
+      <h3>行业趋势追问卡</h3>
+      <p><strong>${sanitize(trend.scenario)}</strong>：${sanitize(trend.timing)}</p>
+      <ul class="pill-list">
+        ${(trend.enterpriseFocus.length ? trend.enterpriseFocus : ["成本", "可靠性", "合规", "部署", "ROI"]).map((item) => `<li>${sanitize(item)}</li>`).join("")}
+      </ul>
+      <p class="probe-line">${sanitize(trend.probe)}</p>
     </article>
     <article>
       <h3>方向判断</h3>
@@ -760,15 +1118,67 @@ function updateMessageBody(message, body) {
   $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
 }
 
+function ensureSubmitErrorBox() {
+  let box = $("#submitError");
+  if (box) return box;
+  box = document.createElement("div");
+  box.id = "submitError";
+  box.className = "submit-error hidden";
+  $("#answerForm").insertBefore(box, $(".answer-actions"));
+  return box;
+}
+
+function clearSubmitError() {
+  const box = ensureSubmitErrorBox();
+  box.classList.add("hidden");
+  box.innerHTML = "";
+}
+
+function showSubmitError(message, retryHandler = null, buttonLabel = "重新提交回答") {
+  const box = ensureSubmitErrorBox();
+  box.classList.remove("hidden");
+  box.innerHTML = `
+    <span>${sanitize(message)}</span>
+    ${retryHandler ? `<button class="secondary-button" type="button">${sanitize(buttonLabel)}</button>` : ""}
+  `;
+  const button = box.querySelector("button");
+  if (button && retryHandler) button.addEventListener("click", retryHandler);
+}
+
+function retrySubmitAnswer() {
+  clearSubmitError();
+  if ($("#answerForm").requestSubmit) {
+    $("#answerForm").requestSubmit();
+  } else {
+    $("#submitAnswer").click();
+  }
+}
+
+function setSubmitting(submitting) {
+  state.isSubmitting = submitting;
+  const button = $("#submitAnswer");
+  if (!button.dataset.defaultText) button.dataset.defaultText = button.textContent;
+  button.textContent = submitting ? "提交中..." : button.dataset.defaultText;
+  button.disabled = submitting || !state.started;
+  $("#answerInput").disabled = submitting || !state.started;
+}
+
+function lockAnswerUntilRetry() {
+  $("#answerInput").disabled = true;
+  $("#submitAnswer").disabled = true;
+}
+
 async function saveMessage(role, round, content, meta = {}) {
-  if (!state.sessionId) return;
+  if (!state.sessionId) return true;
   try {
     await apiRequest(`/api/sessions/${state.sessionId}/message`, {
       method: "POST",
       body: JSON.stringify({ role, round, content, meta })
     });
+    return true;
   } catch (error) {
     console.warn("save message failed:", error);
+    return false;
   }
 }
 
@@ -795,7 +1205,7 @@ async function createSessionSnapshot(projectText, track, intensity, feedbackMode
 }
 
 async function saveSessionState(status = "active", extraReport = {}) {
-  if (!state.sessionId) return;
+  if (!state.sessionId) return true;
   try {
     await apiRequest(`/api/sessions/${state.sessionId}/state`, {
       method: "POST",
@@ -814,8 +1224,10 @@ async function saveSessionState(status = "active", extraReport = {}) {
       })
     });
     await loadHistory();
+    return true;
   } catch (error) {
     console.warn("save session state failed:", error);
+    return false;
   }
 }
 
@@ -840,6 +1252,7 @@ function updateTimer() {
   const remaining = Math.max(0, Math.ceil((state.activeDeadline - Date.now()) / 1000));
   target.textContent = formatDuration(remaining);
   target.classList.toggle("time-over", remaining === 0);
+  target.classList.toggle("time-warning", remaining > 0 && remaining <= 15);
   const fill = $("#pressureFill");
   if (fill && state.activeTimeLimit) {
     const elapsed = Math.min(state.activeTimeLimit, state.activeTimeLimit - remaining);
@@ -896,6 +1309,8 @@ async function startSession() {
   state.round = 0;
   state.answers = [];
   state.feedbackMode = feedbackMode;
+  state.intensity = intensity;
+  state.interviewerStyle = interviewerStyle;
   state.feedbackItems = [];
   stopTimer();
   state.activeDeadline = null;
@@ -908,6 +1323,7 @@ async function startSession() {
   state.sessionTitle = "";
 
   $("#chatLog").innerHTML = "";
+  setLockedProjectInputs(true);
   $("#sessionStatus").textContent = "训练中";
   $("#latestDiagnosis").innerHTML = feedbackMode === "realtime"
     ? "<li>先完成第一轮回答。</li>"
@@ -956,6 +1372,8 @@ async function startSession() {
 async function submitAnswer(event) {
   event.preventDefault();
   if (!state.started) return;
+  if (state.isSubmitting) return;
+  syncLiveOptions();
 
   const answer = $("#answerInput").value.trim();
   if (answer.length < 20) {
@@ -964,6 +1382,8 @@ async function submitAnswer(event) {
     return;
   }
 
+  clearSubmitError();
+  setSubmitting(true);
   stopTimer();
   const question = state.questions[state.round];
   const currentQuestionText = questionText(question);
@@ -971,9 +1391,22 @@ async function submitAnswer(event) {
   const elapsedSeconds = state.activeDeadline
     ? Math.max(1, Math.round((Date.now() - (state.activeDeadline - timeLimitSeconds * 1000)) / 1000))
     : 0;
-  addMessage("user", `回答 ${state.round + 1}`, answer);
-  state.answers.push({ question: currentQuestionText, timeLimitSeconds, elapsedSeconds, answer });
-  await saveMessage("candidate", state.round + 1, answer, { question: currentQuestionText, timeLimitSeconds, elapsedSeconds });
+  const timeStats = computeTimeStats(elapsedSeconds, timeLimitSeconds, answer);
+  const timeNote = timeEfficiencyNoteFromStats(timeStats);
+  if (!state.pendingSubmit || state.pendingSubmit.answer !== answer || state.pendingSubmit.question !== currentQuestionText) {
+    addMessage("user", `回答 ${state.round + 1}`, answer);
+  }
+  state.pendingSubmit = { question: currentQuestionText, answer, timeLimitSeconds, elapsedSeconds, timeStats };
+  const savedCandidate = await saveMessage("candidate", state.round + 1, answer, { question: currentQuestionText, timeLimitSeconds, elapsedSeconds, timeStats });
+  if (!savedCandidate) {
+    setSubmitting(false);
+    $("#answerInput").disabled = false;
+    $("#answerInput").value = answer;
+    $("#answerHint").textContent = "回答保存失败，已保留文本。请检查网络或登录状态后重试。";
+    showSubmitError("回答没有保存成功，为避免记录丢失，本轮不会继续。", retrySubmitAnswer);
+    return;
+  }
+  state.answers.push({ question: currentQuestionText, timeLimitSeconds, elapsedSeconds, timeStats, answer });
 
   const scores = scoreAnswer(answer);
   scores.time = scoreTimeEfficiency(elapsedSeconds, timeLimitSeconds, answer);
@@ -984,6 +1417,7 @@ async function submitAnswer(event) {
   let structuredFeedback = null;
   let shouldEnd = false;
   let endReason = "";
+  let usedLocalFallback = false;
   $("#latestDiagnosis").innerHTML = state.feedbackMode === "realtime"
     ? "<li>正在诊断回答。如果 API 不可用，会自动使用本地规则。</li>"
     : "<li>本轮反馈已记录，将在最终报告中统一展示。</li>";
@@ -992,11 +1426,16 @@ async function submitAnswer(event) {
     const ai = await requestAgentStep({
       sessionId: state.sessionId,
       facts: state.facts,
-      interviewerStyle: $("#interviewerStyle").value,
+      intensity: state.intensity,
+      interviewerStyle: state.interviewerStyle,
       question: currentQuestionText,
       timeLimitSeconds,
       elapsedSeconds,
-      timeEfficiencyNote: timeEfficiencyNote(elapsedSeconds, timeLimitSeconds),
+      estimatedSpokenSeconds: timeStats.estimatedSpokenSeconds,
+      effectiveSeconds: timeStats.effectiveSeconds,
+      overtimeSeconds: timeStats.overtimeSeconds,
+      timeEfficiencyRatio: timeStats.ratio,
+      timeEfficiencyNote: timeNote,
       answer,
       previousRounds: state.answers.slice(0, -1),
       previousFeedback: state.feedbackItems.slice(-3),
@@ -1019,7 +1458,7 @@ async function submitAnswer(event) {
         metrics: clampScore(ai.scores.metrics, scores.metrics),
         engineering: clampScore(ai.scores.engineering, scores.engineering),
         industry: clampScore(ai.scores.industry, scores.industry),
-        time: clampScore(ai.scores.time, scores.time)
+        time: Math.min(clampScore(ai.scores.time, scores.time), scores.time)
       };
     }
     shouldEnd = Boolean(ai.should_end);
@@ -1029,30 +1468,98 @@ async function submitAnswer(event) {
     }
   } catch (error) {
     console.warn("AI agent fallback:", error);
+    usedLocalFallback = true;
   }
 
   if (!structuredFeedback) structuredFeedback = normalizeFeedback({
     answer_relevance: localRelevance
   }, diagnosis);
+  if (usedLocalFallback) {
+    structuredFeedback.answer_analysis = `模型诊断暂不可用，已用本地规则给出临时判断。${structuredFeedback.answer_analysis}`;
+    diagnosis.unshift("模型接口本轮不可用，系统使用本地规则完成临时诊断。");
+  }
   if (structuredFeedback.answer_relevance.verdict.startsWith("未评估")) {
     structuredFeedback.answer_relevance = localRelevance;
   }
+  const pressureDecision = buildPressureDecision(structuredFeedback.answer_relevance, finalScores, diagnosis, answer, currentQuestionText);
   state.feedbackItems.push({
     round: state.round + 1,
     question: currentQuestionText,
     answer,
     elapsedSeconds,
     timeLimitSeconds,
-    timeEfficiencyNote: timeEfficiencyNote(elapsedSeconds, timeLimitSeconds),
+    timeStats,
+    timeEfficiencyNote: timeNote,
     scores: { ...finalScores },
     averageScore: scoreAverage(finalScores),
+    pressure_decision: pressureDecision,
     ...structuredFeedback
   });
 
   mergeScores(finalScores);
   state.risks.push(...diagnosis.filter((item) => !item.includes("比较扎实")));
-  await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
+  const savedFeedback = await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
+  if (!savedFeedback) {
+    setSubmitting(false);
+    lockAnswerUntilRetry();
+    $("#answerHint").textContent = "诊断已生成，但反馈保存失败。请点击重新保存后继续。";
+    showSubmitError("反馈保存失败，本轮没有进入下一题。", async () => {
+      clearSubmitError();
+      setSubmitting(true);
+      const ok = await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
+      setSubmitting(false);
+      if (ok) {
+        await finalizeSubmittedRound({ ...structuredFeedback, pressure_decision: pressureDecision }, shouldEnd, endReason);
+      } else {
+        lockAnswerUntilRetry();
+        showSubmitError("反馈仍然保存失败，请稍后再试。", async () => {
+          clearSubmitError();
+          setSubmitting(true);
+          const retryOk = await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
+          setSubmitting(false);
+          if (retryOk) {
+            await finalizeSubmittedRound({ ...structuredFeedback, pressure_decision: pressureDecision }, shouldEnd, endReason);
+          } else {
+            lockAnswerUntilRetry();
+            showSubmitError("反馈仍然保存失败，请稍后再试。", async () => {
+              clearSubmitError();
+              setSubmitting(true);
+              const finalOk = await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
+              setSubmitting(false);
+              if (finalOk) {
+                await finalizeSubmittedRound({ ...structuredFeedback, pressure_decision: pressureDecision }, shouldEnd, endReason);
+              } else {
+                lockAnswerUntilRetry();
+                showSubmitError("反馈仍然保存失败，请稍后再试。", null);
+              }
+            }, "重新保存并继续");
+          }
+        }, "重新保存并继续");
+      }
+    }, "重新保存并继续");
+    renderScores();
+    renderReport();
+    return;
+  }
 
+  if (pressureDecision.action === "repeat") {
+    shouldEnd = false;
+    state.questions[state.round + 1] = normalizeQuestion({
+      question: pressureDecision.nextQuestion,
+      time_limit_seconds: pressureDecision.timeLimitSeconds,
+      axis: "跑题重答"
+    });
+  } else if (pressureDecision.action === "narrow" && !state.questions[state.round + 1]) {
+    state.questions[state.round + 1] = normalizeQuestion({
+      question: pressureDecision.nextQuestion,
+      time_limit_seconds: pressureDecision.timeLimitSeconds,
+      axis: "证据收窄"
+    });
+  }
+  await finalizeSubmittedRound({ ...structuredFeedback, pressure_decision: pressureDecision }, shouldEnd, endReason);
+}
+
+async function finalizeSubmittedRound(structuredFeedback, shouldEnd, endReason) {
   if (state.feedbackMode === "realtime") {
     renderLatestFeedback(structuredFeedback);
   } else {
@@ -1063,15 +1570,64 @@ async function submitAnswer(event) {
   state.round += 1;
   $("#roundCounter").textContent = `${state.round}`;
   renderReport();
-  await saveSessionState("active");
+  const savedState = await saveSessionState("active");
+  if (!savedState) {
+    setSubmitting(false);
+    lockAnswerUntilRetry();
+    $("#answerHint").textContent = "本轮状态保存失败，已保留你的回答。请重新保存后继续。";
+    showSubmitError("会话状态保存失败，本轮没有进入下一题。", async () => {
+      clearSubmitError();
+      setSubmitting(true);
+      const ok = await saveSessionState("active");
+      setSubmitting(false);
+      if (ok) {
+        state.pendingSubmit = null;
+        continueAfterSuccessfulSubmit(shouldEnd, endReason);
+      } else {
+        lockAnswerUntilRetry();
+        showSubmitError("会话状态仍然保存失败，请稍后再试。", async () => {
+          clearSubmitError();
+          setSubmitting(true);
+          const retryOk = await saveSessionState("active");
+          setSubmitting(false);
+          if (retryOk) {
+            state.pendingSubmit = null;
+            continueAfterSuccessfulSubmit(shouldEnd, endReason);
+          } else {
+            lockAnswerUntilRetry();
+            showSubmitError("会话状态仍然保存失败，请稍后再试。", async () => {
+              clearSubmitError();
+              setSubmitting(true);
+              const finalOk = await saveSessionState("active");
+              setSubmitting(false);
+              if (finalOk) {
+                state.pendingSubmit = null;
+                continueAfterSuccessfulSubmit(shouldEnd, endReason);
+              } else {
+                lockAnswerUntilRetry();
+                showSubmitError("会话状态仍然保存失败，请稍后再试。", null);
+              }
+            }, "重新保存并继续");
+          }
+        }, "重新保存并继续");
+      }
+    }, "重新保存并继续");
+    renderReport();
+    return;
+  }
+  state.pendingSubmit = null;
+  setSubmitting(false);
+  continueAfterSuccessfulSubmit(shouldEnd, endReason);
+}
 
+function continueAfterSuccessfulSubmit(shouldEnd, endReason) {
   if (shouldEnd) {
     finishSession(endReason);
   } else if (state.round >= state.maxSafetyRounds) {
     finishSession("已达到 10 轮安全上限，系统主动收束。");
   } else {
     if (!state.questions[state.round]) {
-      const fallback = buildQuestions($("#track").value, $("#intensity").value, state.facts)[state.round] || commonQuestions[3];
+      const fallback = buildQuestions($("#track").value, state.intensity, state.facts)[state.round] || commonQuestions[3];
       state.questions[state.round] = normalizeQuestion(fallback);
     }
     setTimeout(() => askNextQuestion(), 280);
@@ -1128,6 +1684,7 @@ function renderReport() {
         ${uniqueRisks.length ? uniqueRisks.map((item) => `<li>${sanitize(item)}</li>`).join("") : "<li>暂未发现明显高风险点，继续补充细节和指标。</li>"}
       </ul>
     </article>
+    ${renderProductMetrics()}
     <article>
       <h3>下一轮训练重点</h3>
       <p>下一次练习优先补这些，不要平均用力。</p>
@@ -1155,8 +1712,9 @@ function renderFeedbackSummary() {
         <div class="feedback-item">
           <h3>第 ${item.round} 轮 · 本轮 ${item.averageScore ?? scoreAverage(item.scores)} 分</h3>
           ${renderScoreMini(item.scores)}
-          <p><strong>答题时长：</strong>${formatDuration(item.elapsedSeconds || 0)} / 建议 ${formatDuration(item.timeLimitSeconds || 0)}。${sanitize(item.timeEfficiencyNote || "")}</p>
+          ${renderTimeSummary(item)}
           <p><strong>是否答到问题：</strong>${sanitize(item.answer_relevance?.verdict || "未评估")}${item.answer_relevance?.evidence ? `：${sanitize(item.answer_relevance.evidence)}` : ""}</p>
+          <p><strong>压力阶梯：</strong>${sanitize(item.pressure_decision?.label || "正常追问")}${item.pressure_decision?.reason ? `：${sanitize(item.pressure_decision.reason)}` : ""}</p>
           <p><strong>问题分析：</strong>${sanitize(item.question_analysis)}</p>
           <p><strong>回答分析：</strong>${sanitize(item.answer_analysis)}</p>
           <p><strong>痛点：</strong>${sanitize(item.pain_point)}</p>
@@ -1168,13 +1726,25 @@ function renderFeedbackSummary() {
   `;
 }
 
+function renderTimeSummary(item) {
+  const timeStats = normalizeTimeStats(item);
+  const overtime = timeStats.overtimeSeconds
+    ? `，超时 ${formatDuration(timeStats.overtimeSeconds)}`
+    : "，未超时";
+  return `
+    <p><strong>答题时长：</strong>实际 ${formatDuration(timeStats.actualSeconds)} / 估算口述 ${formatDuration(timeStats.estimatedSpokenSeconds)} / 建议 ${formatDuration(timeStats.limitSeconds)}${overtime}。</p>
+    <p><strong>表达效率：</strong>${sanitize(item.timeEfficiencyNote || timeEfficiencyNoteFromStats(timeStats))}</p>
+  `;
+}
+
 async function enrichFinalReport(reason = "") {
+  syncLiveOptions();
   let reportExtra = { endReason: reason };
   try {
     const ai = await requestAI("report", {
       sessionId: state.sessionId,
       facts: state.facts,
-      interviewerStyle: $("#interviewerStyle").value,
+      interviewerStyle: state.interviewerStyle,
       answers: state.answers,
       scores: state.scores,
       risks: state.risks,
@@ -1214,6 +1784,7 @@ function finishSession(reason = "") {
   $("#answerInput").disabled = true;
   $("#submitAnswer").disabled = true;
   $("#answerHint").textContent = "训练结束，查看报告继续补漏洞。";
+  setLockedProjectInputs(false);
   stopTimer();
   renderCurrentQuestion(null, "done");
   renderReport();
@@ -1252,6 +1823,7 @@ function resetSession() {
   state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
 
   $("#sessionStatus").textContent = "待开始";
+  setLockedProjectInputs(false);
   $("#roundCounter").textContent = "0";
   $("#chatLog").innerHTML = `
     <div class="empty-state">
@@ -1303,6 +1875,7 @@ async function openHistorySession(sessionId) {
     $("#intensity").value = item.intensity || "normal";
     $("#interviewerStyle").value = "mixed";
     $("#feedbackMode").value = item.feedbackMode || "realtime";
+    syncLiveOptions();
     $("#projectText").value = item.projectText || "";
     $("#jdKeywords").value = item.jdKeywords || "";
     $("#focusText").value = item.focusText || "";
@@ -1324,6 +1897,7 @@ async function openHistorySession(sessionId) {
     $("#answerInput").disabled = true;
     $("#submitAnswer").disabled = true;
     $("#answerHint").textContent = "正在查看历史记录。点击“新模拟”开启新对话。";
+    setLockedProjectInputs(false);
     switchTab("report");
   } catch (error) {
     alert(`读取历史失败：${error.message}`);
@@ -1340,11 +1914,17 @@ $("#startSession").addEventListener("click", startSession);
 $("#resetSession").addEventListener("click", resetSession);
 $("#stopSession").addEventListener("click", stopInterview);
 $("#newSession").addEventListener("click", newSimulation);
-$("#refreshHistory").addEventListener("click", () => loadHistory());
+$("#refreshHistory").addEventListener("click", (event) => {
+  event.stopPropagation();
+  loadHistory();
+});
 $("#loginButton").addEventListener("click", () => handleAuth("login").catch((error) => alert(error.message)));
 $("#registerButton").addEventListener("click", () => handleAuth("register").catch((error) => alert(error.message)));
 $("#logoutButton").addEventListener("click", logout);
 $("#answerForm").addEventListener("submit", submitAnswer);
+$("#intensity").addEventListener("change", syncLiveOptions);
+$("#interviewerStyle").addEventListener("change", syncLiveOptions);
+$("#feedbackMode").addEventListener("change", syncLiveOptions);
 $("#loadSample").addEventListener("click", () => {
   $("#track").value = "code";
   $("#intensity").value = "senior";

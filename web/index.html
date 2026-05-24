@@ -109,15 +109,15 @@
           <button class="secondary-button" id="resetSession" type="button" title="清空当前训练状态">重置</button>
         </div>
 
-        <div id="historyBox" class="history-box hidden">
-          <div class="panel-head compact">
-            <h2>历史模拟</h2>
+        <details id="historyBox" class="history-box hidden">
+          <summary>
+            <span>历史模拟</span>
             <button class="ghost-button" id="refreshHistory" type="button">刷新</button>
-          </div>
+          </summary>
           <ul id="historyList">
             <li>还没有历史模拟。</li>
           </ul>
-        </div>
+        </details>
       </aside>
 
       <section class="main-panel" aria-label="面试训练区">
@@ -125,6 +125,7 @@
           <button class="tab active" data-tab="interview" type="button">面试</button>
           <button class="tab" data-tab="facts" type="button">事实卡</button>
           <button class="tab" data-tab="report" type="button">报告</button>
+          <button class="tab" data-tab="help" type="button">帮助</button>
         </nav>
 
         <div class="tab-view active" id="interviewView">
@@ -166,6 +167,101 @@
             </article>
           </div>
         </div>
+
+        <div class="tab-view" id="helpView">
+          <div class="help-panel">
+            <article class="wide-card quick-start">
+              <h3>快速上手</h3>
+              <ol>
+                <li>登录或注册，保证每次模拟、回答和报告都会保存到历史记录。</li>
+                <li>在左侧粘贴一段简历项目，至少写清背景、你负责的部分、技术栈、数据、指标和结果。</li>
+                <li>选择技术方向、面试强度、面试官风格和反馈模式，然后点击开始拷问。</li>
+                <li>每轮只回答当前问题。优先用“结论、证据、取舍、不足”四步回答，不要背项目介绍。</li>
+                <li>训练中看右侧即时诊断；结束后到报告页看每轮评分、痛点、示例回答和下一轮训练重点。</li>
+              </ol>
+            </article>
+
+            <article class="wide-card">
+              <h3>项目拷问官是什么</h3>
+              <p>它是技术岗项目深挖训练器，不是通用聊天面试官。它会围绕你的简历项目连续追问真实性、实现细节、方法选择、指标评估、工程落地、行业理解和表达效率。</p>
+              <p>目标不是让你背答案，而是帮你发现项目中最容易被问穿的位置，并把回答补到“能被继续追问”的程度。</p>
+            </article>
+
+            <article>
+              <h3>推荐使用流程</h3>
+              <ol>
+                <li>先登录，保证每次模拟都会保存。</li>
+                <li>粘贴一段真实项目经历，尽量包含背景、个人职责、技术栈、数据、指标和结果。</li>
+                <li>选择技术方向、面试强度、面试官风格和反馈模式。</li>
+                <li>点击开始拷问，一次只回答当前问题。</li>
+                <li>回答时先给结论，再给证据，最后说取舍或不足。</li>
+                <li>训练结束后去报告页看每轮复盘和整场总结。</li>
+              </ol>
+            </article>
+
+            <article>
+              <h3>事实卡怎么用</h3>
+              <p>事实卡是面试官读项目材料后的抓漏洞清单。它用于决定先问哪里，不是最终评分。</p>
+              <ul>
+                <li>证据链拷问图：把项目拆成主张、需要证据和风险点。</li>
+                <li>行业趋势追问卡：提醒你准备成本、可靠性、合规、部署和 ROI。</li>
+                <li>方向判断：系统认为你的项目更接近哪个技术方向。</li>
+                <li>岗位关键词：你填的能力关键词是否能被项目支撑。</li>
+                <li>简历完整度：个人贡献、指标、数据来源、工程落地、行业场景是否写清。</li>
+                <li>初始风险点：面试官最可能第一时间追问的缺口。</li>
+              </ul>
+            </article>
+
+            <article>
+              <h3>即时诊断怎么用</h3>
+              <p>即时诊断只看最近一轮，用于当场调整。它会显示本轮分数、是否答到问题，以及最核心的痛点。</p>
+              <p>如果选择结束后总体反馈，训练中不会展开逐轮评价，但每轮反馈仍会保存到报告里。</p>
+            </article>
+
+            <article>
+              <h3>三种面试强度</h3>
+              <ul>
+                <li>普通技术面：先确认项目主线、个人职责和基本技术判断，压力最低。</li>
+                <li>深挖技术面：持续追代码路径、指标、取舍、边界条件、失败案例和工程落地。</li>
+                <li>压力拷问：直接质疑真实性、个人贡献、是否调包、指标是否自洽、异常场景是否真的做过。</li>
+              </ul>
+            </article>
+
+            <article class="wide-card">
+              <h3>六个评分指标</h3>
+              <div class="help-metric-grid">
+                <div><strong>真实性</strong><span>能否证明你亲手做过，有清楚的个人贡献、代码边界、调试经历和失败案例。</span></div>
+                <div><strong>技术深度</strong><span>能否讲清原理、替代方案、取舍、边界条件和复杂问题。</span></div>
+                <div><strong>指标意识</strong><span>能否说明怎么证明方案有效，包括指标定义、baseline、采集方式和失败样本。</span></div>
+                <div><strong>工程落地</strong><span>能否说明部署、异常、监控、性能、成本、安全、降级和回滚。</span></div>
+                <div><strong>趋势判断</strong><span>能否理解真实业务场景、企业约束、行业发展和技术趋势对方案的影响。</span></div>
+                <div><strong>表达效率</strong><span>能否在建议时长内先给结论、再给证据、最后收束；拖太久会扣分。</span></div>
+              </div>
+            </article>
+
+            <article>
+              <h3>报告怎么用</h3>
+              <p>报告是最终复盘区。无论实时反馈还是结束后反馈，报告都会保留每轮评分和反馈。</p>
+              <ul>
+                <li>总览：看最终总分、最近一轮、完成轮次和危险点数量。</li>
+                <li>训练有效性：这是工具本身的质量指标，看问题是否贴项目、追问是否深入、诊断是否抓住真实痛点。</li>
+                <li>每轮复盘：看每轮六维分、答题时长、是否答到问题、痛点和示例回答。</li>
+                <li>整场总结：看反复暴露的问题和下一轮训练重点。</li>
+              </ul>
+            </article>
+
+            <article>
+              <h3>如何真正提升</h3>
+              <ul>
+                <li>不要只看总分，优先看最低维度和被连续追问的地方。</li>
+                <li>把每个项目准备成三层：90 秒概述、核心模块实现、失败和改进。</li>
+                <li>每个关键结论都配一个证据：代码路径、指标、日志、压测、实验或线上案例。</li>
+                <li>如果被指出没答到问题，下一轮先复述问题核心，再回答，不要背准备稿。</li>
+                <li>每轮结束后，把示例回答改写成你自己项目真实发生过的版本。</li>
+              </ul>
+            </article>
+          </div>
+        </div>
       </section>
 
       <aside class="insight-panel" aria-label="即时诊断">
@@ -203,17 +299,17 @@
         </div>
 
         <div class="diagnosis-box">
-          <h3>最近一轮</h3>
-          <ul id="latestDiagnosis">
-            <li>还没有回答。开始后这里会显示哪里虚、哪里会被继续追。</li>
-          </ul>
-        </div>
-
-        <div class="diagnosis-box">
           <h3>当前追问</h3>
           <div id="currentQuestionBox" class="current-question-box">
             <p>等待开始。</p>
           </div>
+        </div>
+
+        <div class="diagnosis-box">
+          <h3>最近一轮</h3>
+          <ul id="latestDiagnosis">
+            <li>还没有回答。开始后这里会显示哪里虚、哪里会被继续追。</li>
+          </ul>
         </div>
       </aside>
     </section>

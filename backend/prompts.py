@@ -37,6 +37,34 @@ INTERVIEWER_STYLES = {
 }
 
 
+INTENSITY_POLICIES = {
+    "normal": {
+        "name": "普通技术面",
+        "pressure": "低",
+        "question_style": "先澄清事实，再追一个关键细节；语气平稳，允许候选人补充。",
+        "challenge_level": "少用质疑句，重点确认项目主线、个人职责和基本技术判断。",
+        "scoring": "回答有基本事实和合理解释即可给中等分；不要过度苛刻。",
+        "end_bias": "覆盖主要风险后及时收束。",
+    },
+    "senior": {
+        "name": "深挖技术面",
+        "pressure": "中",
+        "question_style": "围绕上一轮回答追证据、取舍、边界、指标和工程落地。",
+        "challenge_level": "要求候选人解释为什么这样做、替代方案是什么、失败时怎么兜底。",
+        "scoring": "缺少具体实现、指标或失败案例要明显扣分。",
+        "end_bias": "核心链路、指标、工程风险至少覆盖两类后再收束。",
+    },
+    "pressure": {
+        "name": "压力拷问",
+        "pressure": "高",
+        "question_style": "直接指出疑点，要求候选人给可验证证据；可以使用“我不接受这个泛泛说法”“这听起来像包装”这类表达。",
+        "challenge_level": "优先质疑真实性、个人贡献边界、是否只是调包、数据是否可靠、指标是否自洽、异常场景是否真的做过。",
+        "scoring": "没有证据、跑题、概念化回答要低分；表达完整但没有真实证据也不能高分。",
+        "end_bias": "连续两轮无法给证据时可以提前结束并指出项目需要重做材料。",
+    },
+}
+
+
 def load_system_prompt():
     return (PROMPTS_ROOT / "system.md").read_text(encoding="utf-8").strip()
 
@@ -61,16 +89,23 @@ def interviewer_style(context):
     return INTERVIEWER_STYLES.get(style_key, INTERVIEWER_STYLES["mixed"])
 
 
+def intensity_policy(context):
+    intensity = str(context.get("intensity") or "normal")
+    return INTENSITY_POLICIES.get(intensity, INTENSITY_POLICIES["normal"])
+
+
 def build_prompt(payload):
     task = payload.get("task")
     context = payload.get("context", {})
     skills = load_skills()
     style = interviewer_style(context)
+    intensity = intensity_policy(context)
 
     if task == "questions":
         return {
             "instruction": load_task_instruction("questions"),
             "interviewer_style": style,
+            "intensity_policy": intensity,
             "interviewer_skills": skills,
             "time_limit_policy": {
                 "45-75": "事实确认、角色边界、简单澄清",
@@ -99,10 +134,11 @@ def build_prompt(payload):
         return {
             "instruction": load_task_instruction("agent_step"),
             "interviewer_style": style,
+            "intensity_policy": intensity,
             "interviewer_skills": skills,
             "max_safety_rounds": MAX_SAFETY_ROUNDS,
             "scoring_policy": {
-                "time_efficiency": "回答时长要纳入评分。明显超时、拖沓或长时间没有结论，应降低表达效率分，并在反馈中指出。",
+                "time_efficiency": "回答时长要纳入评分。前端会提供实际耗时 elapsedSeconds、按文本长度估算的口述耗时 estimatedSpokenSeconds、最终判定耗时 effectiveSeconds 和超时 overtimeSeconds。表达效率按 effectiveSeconds 判断；文本很长但提交很快不能高分。明显超时、拖沓或长时间没有结论，应降低表达效率分，并在反馈中指出超时多少。",
                 "relevance_gate": "如果回答没有对应本轮问题，各项分数必须压低；不要因专业词汇多而高分。",
             },
             "schema": {
@@ -147,6 +183,7 @@ def build_prompt(payload):
         return {
             "instruction": load_task_instruction("report"),
             "interviewer_style": style,
+            "intensity_policy": intensity,
             "interviewer_skills": skills,
             "schema": {
                 "summary": "一句话总结",

@@ -261,4 +261,8 @@ class Handler(BaseHTTPRequestHandler):
             return json_response(self, 500, {"ok": False, "error": str(exc)})
 
     def log_message(self, fmt, *args):
-        print(f"[server] {self.address_string()} - {fmt % args}")
+        message = fmt % args
+        if "Bad request version" in message or "Bad request syntax" in message:
+            print(f"[server] {self.address_string()} - ignored malformed HTTP request")
+            return
+        print(f"[server] {self.address_string()} - {message}")

@@ -14,4 +14,5 @@ dashscope:
 
 app:
   max_safety_rounds: 10
+  session_ttl_seconds: 1209600
   require_json_output: true

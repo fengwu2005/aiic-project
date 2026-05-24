@@ -21,6 +21,25 @@
 
     <section class="workspace">
       <aside class="setup-panel" aria-label="项目输入">
+        <div class="auth-card">
+          <div class="panel-head compact">
+            <h2>账户</h2>
+            <span id="currentUser">未登录</span>
+          </div>
+          <div id="authForm" class="auth-form">
+            <input id="loginUsername" type="text" autocomplete="username" placeholder="用户名">
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="密码">
+            <div class="button-row auth-actions">
+              <button class="primary-button" id="loginButton" type="button">登录</button>
+              <button class="secondary-button" id="registerButton" type="button">注册</button>
+            </div>
+          </div>
+          <div id="userBox" class="user-box hidden">
+            <p>每次模拟都会保存，方便复盘和调试。</p>
+            <button class="ghost-button" id="logoutButton" type="button">退出登录</button>
+          </div>
+        </div>
+
         <div class="panel-head">
           <h2>项目材料</h2>
           <button class="ghost-button" id="loadSample" type="button" title="填入一段通用技术项目示例">示例</button>
@@ -50,6 +69,18 @@
         </label>
 
         <label>
+          <span>面试官风格</span>
+          <select id="interviewerStyle">
+            <option value="mixed">混合型</option>
+            <option value="professional">专业型</option>
+            <option value="pressure">压力型</option>
+            <option value="friendly">随和型</option>
+            <option value="business">业务落地型</option>
+            <option value="fundamental">基础盘型</option>
+          </select>
+        </label>
+
+        <label>
           <span>反馈模式</span>
           <select id="feedbackMode">
             <option value="realtime">实时看到反馈</option>
@@ -74,7 +105,18 @@
 
         <div class="button-row">
           <button class="primary-button" id="startSession" type="button">开始拷问</button>
+          <button class="secondary-button" id="newSession" type="button" title="清空当前对话，开启新的模拟">新模拟</button>
           <button class="secondary-button" id="resetSession" type="button" title="清空当前训练状态">重置</button>
+        </div>
+
+        <div id="historyBox" class="history-box hidden">
+          <div class="panel-head compact">
+            <h2>历史模拟</h2>
+            <button class="ghost-button" id="refreshHistory" type="button">刷新</button>
+          </div>
+          <ul id="historyList">
+            <li>还没有历史模拟。</li>
+          </ul>
         </div>
       </aside>
 
@@ -97,7 +139,10 @@
             <textarea id="answerInput" rows="4" placeholder="先点击“开始拷问”。回答时尽量给出具体方案、指标、取舍和失败案例。" disabled></textarea>
             <div class="answer-actions">
               <span id="answerHint">回答越具体，诊断越准。</span>
-              <button class="primary-button" id="submitAnswer" type="submit" disabled>提交回答</button>
+              <div class="button-row inline-actions">
+                <button class="secondary-button" id="stopSession" type="button">终止面试</button>
+                <button class="primary-button" id="submitAnswer" type="submit" disabled>提交回答</button>
+              </div>
             </div>
           </form>
         </div>
@@ -106,8 +151,8 @@
           <div class="fact-grid" id="factGrid">
             <article>
               <h3>项目事实卡</h3>
-              <p>事实卡是面试官读你项目材料时的“草稿纸”：它会拆出你的个人贡献、技术路线、数据指标、工程落地和行业场景缺口，用来决定下一步该追哪里。</p>
-              <p>它不是最终评价，而是为了让追问更像真实面试官读简历后的判断。</p>
+              <p>事实卡是面试官读简历后的结构化草稿，用来决定先问哪里、哪里可能被问穿。</p>
+              <p>它会拆出方向判断、岗位关键词、项目材料完整度和初始风险点。它不打最终分，也不替代报告。</p>
             </article>
           </div>
         </div>
@@ -116,8 +161,8 @@
           <div class="report-panel" id="reportPanel">
             <article>
               <h3>抗拷问报告</h3>
-              <p>报告是训练结束后的复盘：汇总每轮问题分析、你的回答分析、暴露痛点、改进建议和示例回答。</p>
-              <p>它的作用是告诉你这个项目哪里最容易被问穿，以及下一轮应该优先补哪块。</p>
+              <p>报告是最终复盘区。无论选择实时反馈还是结束后反馈，训练结束后都会在这里汇总每一轮反馈。</p>
+              <p>它包含每轮问题分析、回答分析、是否答到问题、痛点、改进建议、示例回答，以及整场总结和下一轮训练重点。</p>
             </article>
           </div>
         </div>

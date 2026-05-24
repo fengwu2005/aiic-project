@@ -17,7 +17,20 @@ const state = {
     engineering: 0,
     industry: 0
   },
-  risks: []
+  latestScores: {
+    authenticity: 0,
+    depth: 0,
+    metrics: 0,
+    engineering: 0,
+    industry: 0
+  },
+  risks: [],
+  authToken: localStorage.getItem("projectInterrogatorToken") || "",
+  user: null,
+  sessionId: null,
+  sessionTitle: "",
+  history: [],
+  streamBuffer: ""
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -183,7 +196,7 @@ function formatDuration(seconds) {
 async function requestAI(task, context) {
   const response = await fetch("/api/ai", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ task, context })
   });
 
@@ -195,6 +208,135 @@ async function requestAI(task, context) {
   const data = await response.json();
   if (!data.ok) throw new Error(data.error || "AI request failed");
   return data.result;
+}
+
+function authHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (state.authToken) headers.Authorization = `Bearer ${state.authToken}`;
+  return headers;
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || `Request failed: ${response.status}`);
+  }
+  return data;
+}
+
+function setAuth(token, user) {
+  state.authToken = token || "";
+  state.user = user || null;
+  if (token) {
+    localStorage.setItem("projectInterrogatorToken", token);
+  } else {
+    localStorage.removeItem("projectInterrogatorToken");
+  }
+  renderAuth();
+}
+
+function ensureLoggedIn() {
+  if (state.user && state.authToken) return true;
+  alert("请先登录或注册，这样每次模拟和问答日志才能保存。");
+  $("#loginUsername").focus();
+  return false;
+}
+
+async function loadMe() {
+  if (!state.authToken) {
+    renderAuth();
+    return;
+  }
+  try {
+    const data = await apiRequest("/api/me");
+    state.user = data.user;
+    renderAuth();
+    await loadHistory();
+  } catch (error) {
+    setAuth("", null);
+  }
+}
+
+function renderAuth() {
+  const authed = Boolean(state.user);
+  $("#authForm").classList.toggle("hidden", authed);
+  $("#userBox").classList.toggle("hidden", !authed);
+  $("#historyBox").classList.toggle("hidden", !authed);
+  $("#currentUser").textContent = authed ? state.user.username : "未登录";
+}
+
+async function handleAuth(mode) {
+  const username = $("#loginUsername").value.trim();
+  const password = $("#loginPassword").value;
+  if (username.length < 3 || password.length < 6) {
+    alert("用户名至少 3 位，密码至少 6 位。");
+    return;
+  }
+  const data = await apiRequest(`/api/${mode}`, {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+  setAuth(data.token, data.user);
+  $("#loginPassword").value = "";
+  await loadHistory();
+}
+
+async function logout() {
+  try {
+    await apiRequest("/api/logout", { method: "POST", body: "{}" });
+  } catch (error) {
+    console.warn("logout failed:", error);
+  }
+  setAuth("", null);
+  state.history = [];
+  renderHistory();
+  newSimulation();
+}
+
+async function loadHistory() {
+  if (!state.user) return;
+  try {
+    const data = await apiRequest("/api/sessions");
+    state.history = data.sessions || [];
+    renderHistory();
+  } catch (error) {
+    console.warn("history failed:", error);
+  }
+}
+
+function renderHistory() {
+  const list = $("#historyList");
+  if (!state.history.length) {
+    list.innerHTML = "<li>还没有历史模拟。</li>";
+    return;
+  }
+  list.innerHTML = state.history.map((item) => `
+    <li>
+      <button type="button" class="history-item" data-session-id="${item.id}">
+        <strong>${sanitize(item.title || "项目拷问")}</strong>
+        <span>${item.status === "active" ? "进行中" : "已结束"} · ${formatDate(item.updatedAt)}</span>
+      </button>
+    </li>
+  `).join("");
+  $$(".history-item").forEach((button) => {
+    button.addEventListener("click", () => openHistorySession(Number(button.dataset.sessionId)));
+  });
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return "";
+  return new Date(timestamp * 1000).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function makeSessionTitle(projectText) {
+  return projectText.replace(/\s+/g, " ").slice(0, 28) || "新的项目拷问";
 }
 
 function sanitize(text) {
@@ -278,17 +420,33 @@ async function requestAgentStep(context) {
 function normalizeFeedback(feedback, fallbackDiagnosis = []) {
   const source = feedback || {};
   return {
-    question_analysis: String(source.question_analysis || "这个问题在考察你是否能围绕项目给出具体证据，而不是泛泛描述。"),
-    answer_analysis: String(source.answer_analysis || fallbackDiagnosis.join("；") || "回答信息不足，暂时无法形成完整分析。"),
-    pain_point: String(source.pain_point || fallbackDiagnosis[0] || "本轮暴露出的痛点还不够明确，需要补充技术证据。"),
-    improvement: String(source.improvement || "建议按“结论 - 证据 - 指标 - 取舍”的顺序重答一版。"),
-    sample_answer: String(source.sample_answer || "示例：我负责的是某个具体模块，为了解决某个问题采用了某个方案，并用某个指标验证效果；这个方案的主要取舍是……")
+    answer_relevance: normalizeAssessment(source.answer_relevance, "未评估回答是否对题。"),
+    question_analysis: limitText(source.question_analysis || "这题在验证你能否拿出项目证据。", 90),
+    answer_analysis: limitText(source.answer_analysis || fallbackDiagnosis.join("；") || "回答信息不足，还缺少可验证细节。", 150),
+    pain_point: limitText(source.pain_point || fallbackDiagnosis[0] || "缺少关键技术证据。", 80),
+    improvement: limitText(source.improvement || "下一次先给结论，再补实现证据、指标和取舍。", 110),
+    sample_answer: String(source.sample_answer || "我负责的是核心链路中的代码分析和评测部分。具体做法是先用 AST 抽取函数、调用和异常分支，再用规则筛出高风险代码片段，最后把结构化上下文交给模型生成审查意见。为了证明它有效，我用真实 issue 和人工样例做了评测，分别看漏报率、误报率和响应耗时；目前最大的不足是跨文件语义还不稳定，所以我会把这类场景标成低置信度，并要求人工复核。")
   };
+}
+
+function normalizeAssessment(value, fallback) {
+  const source = value || {};
+  return {
+    score: clampScore(source.score, 5),
+    verdict: limitText(source.verdict || fallback, 90),
+    evidence: limitText(source.evidence || source.missed_point || "", 120)
+  };
+}
+
+function limitText(text, maxLength) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function renderLatestFeedback(feedback) {
   if (state.feedbackMode !== "realtime") return;
   const parts = [
+    ["是否答到问题", `${feedback.answer_relevance.verdict}${feedback.answer_relevance.evidence ? `：${feedback.answer_relevance.evidence}` : ""}`],
     ["问题分析", feedback.question_analysis],
     ["回答分析", feedback.answer_analysis],
     ["痛点", feedback.pain_point],
@@ -343,11 +501,92 @@ function diagnoseAnswer(answer, question) {
   return notes.slice(0, 4);
 }
 
+function assessAnswerRelevance(answer, question) {
+  const answerTokens = importantTokens(answer);
+  const questionTokens = importantTokens(question);
+  const overlap = questionTokens.filter((token) => answerTokens.includes(token));
+  const score = questionTokens.length ? Math.round((overlap.length / Math.min(questionTokens.length, 8)) * 10) : 6;
+  const asksMetric = /指标|数据|证明|评估|压测|监控|多少|占用|成本|qps|延迟|准确|召回/i.test(question);
+  const asksCode = /代码|实现|流程|路径|伪代码|接口|函数|模块|controller|service/i.test(question);
+  const asksWhy = /为什么|取舍|替代|相比|权衡|选择/i.test(question);
+  const misses = [];
+  if (asksMetric && !/%|qps|延迟|耗时|准确|召回|指标|评估|压测|监控|成本|内存|mb|gb|数量|阈值/i.test(answer)) misses.push("问题在追数据或指标，但回答没有给可验证数字");
+  if (asksCode && !/代码|接口|函数|模块|流程|步骤|先|然后|controller|service|redis|mq|sql|if|for/i.test(answer)) misses.push("问题在追实现路径，但回答没有落到代码或流程");
+  if (asksWhy && !/因为|所以|取舍|相比|替代|成本|收益|风险|选择/i.test(answer)) misses.push("问题在追选择理由，但回答没有讲取舍");
+  if (misses.length) {
+    return { score: Math.min(4, score), verdict: "没有完全答到问题", evidence: misses[0] };
+  }
+  if (score <= 3) return { score, verdict: "基本没对上问题", evidence: "回答和问题关键词重合很低，像是在背准备稿" };
+  if (score <= 5) return { score, verdict: "只回答了一部分", evidence: "有相关内容，但没有覆盖问题里的核心追问点" };
+  return { score: Math.max(6, score), verdict: "基本对应问题", evidence: "" };
+}
+
+function importantTokens(text) {
+  const stop = new Set(["这个", "就是", "然后", "因为", "所以", "如果", "我们", "你们", "一个", "进行", "可以", "没有", "需要", "问题", "回答", "项目", "具体", "这里", "时候", "通过", "对于"]);
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\u4e00-\u9fa5a-z0-9_+.%/-]+/g, " ")
+    .split(/\s+/)
+    .flatMap((token) => {
+      if (/^[\u4e00-\u9fa5]{5,}$/.test(token)) {
+        const chunks = [];
+        for (let i = 0; i <= token.length - 2; i += 2) chunks.push(token.slice(i, i + 2));
+        return chunks;
+      }
+      return [token];
+    })
+    .filter((token) => token.length >= 2 && !stop.has(token));
+}
+
 function mergeScores(next) {
+  const lastFeedback = state.feedbackItems[state.feedbackItems.length - 1];
+  if (lastFeedback) {
+    if (lastFeedback.answer_relevance?.score <= 4) {
+      next.authenticity = Math.min(next.authenticity, 3);
+      next.depth = Math.min(next.depth, 3);
+      next.metrics = Math.min(next.metrics, 3);
+      next.engineering = Math.min(next.engineering, 3);
+      next.industry = Math.min(next.industry, 3);
+    } else if (lastFeedback.answer_relevance?.score <= 6) {
+      next.authenticity = Math.min(next.authenticity, 5);
+      next.depth = Math.min(next.depth, 5);
+      next.metrics = Math.min(next.metrics, 5);
+      next.engineering = Math.min(next.engineering, 5);
+      next.industry = Math.min(next.industry, 5);
+    }
+  }
+  state.latestScores = { ...next };
   const count = state.answers.length;
   Object.keys(state.scores).forEach((key) => {
     state.scores[key] = Math.round(((state.scores[key] * (count - 1)) + next[key]) / count);
   });
+}
+
+function scoreAverage(scores) {
+  const values = Object.values(scores || {});
+  if (!values.length) return 0;
+  return Math.round(values.reduce((sum, item) => sum + Number(item || 0), 0) / values.length);
+}
+
+function renderScoreMini(scores) {
+  const rows = [
+    ["authenticity", "真实性"],
+    ["depth", "技术深度"],
+    ["metrics", "指标意识"],
+    ["engineering", "工程落地"],
+    ["industry", "趋势判断"]
+  ];
+  const safeScores = scores || {};
+  return `
+    <div class="round-score-grid">
+      ${rows.map(([key, label]) => `
+        <div class="round-score">
+          <span>${label}</span>
+          <strong>${Number.isFinite(Number(safeScores[key])) ? safeScores[key] : 0}</strong>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderFacts() {
@@ -357,6 +596,11 @@ function renderFacts() {
 
   const riskClass = facts.riskPoints.length >= 3 ? "danger" : facts.riskPoints.length ? "warning" : "";
   grid.innerHTML = `
+    <article class="wide-card">
+      <h3>这张事实卡怎么用</h3>
+      <p>事实卡相当于面试官读完项目后的“抓漏洞清单”。它不会给最终分，而是告诉你：你的材料目前更像哪个技术方向、哪些关键词能支撑岗位匹配、哪些关键信息没写清，以及第一轮应该优先被追问什么。</p>
+      <p>如果这里显示缺少指标、数据来源、工程落地或行业场景，后面的追问会优先围绕这些缺口展开。</p>
+    </article>
     <article>
       <h3>方向判断</h3>
       <p>${facts.profile.label}</p>
@@ -386,6 +630,10 @@ function renderFacts() {
         ${(facts.riskPoints.length ? facts.riskPoints : ["项目材料基础完整，可以进入深挖。"]).map((item) => `<li>${sanitize(item)}</li>`).join("")}
       </ul>
     </article>
+    <article class="wide-card">
+      <h3>和报告的区别</h3>
+      <p>事实卡发生在面试前或面试刚开始，用来决定怎么问；报告发生在训练过程中和结束后，用来复盘你每一轮答得怎么样、哪里需要补。</p>
+    </article>
   `;
 }
 
@@ -400,22 +648,26 @@ function renderScores() {
   $("#scoreStack").innerHTML = rows.map(([key, label]) => `
     <div class="score-row">
       <span>${label}</span>
-      <meter min="0" max="10" value="${state.scores[key]}"></meter>
-      <strong>${state.scores[key]}</strong>
+      <meter min="0" max="10" value="${state.latestScores[key]}"></meter>
+      <strong>${state.latestScores[key]}</strong>
     </div>
   `).join("");
 
-  const average = Math.round(Object.values(state.scores).reduce((sum, item) => sum + item, 0) / Object.values(state.scores).length);
+  const latestAverage = Math.round(Object.values(state.latestScores).reduce((sum, item) => sum + item, 0) / Object.values(state.latestScores).length);
+  const totalAverage = Math.round(Object.values(state.scores).reduce((sum, item) => sum + item, 0) / Object.values(state.scores).length);
+  $("#scoreStack").innerHTML += state.answers.length
+    ? `<p class="score-note">当前显示本轮分；累计均分 ${totalAverage}</p>`
+    : `<p class="score-note">当前显示本轮分；开始后会计算累计均分。</p>`;
   const badge = $("#riskBadge");
   if (!state.answers.length) {
     badge.textContent = "未评估";
     badge.style.background = "var(--amber-2)";
     badge.style.color = "var(--amber)";
-  } else if (average >= 7) {
+  } else if (latestAverage >= 7) {
     badge.textContent = "较能抗问";
     badge.style.background = "var(--green-2)";
     badge.style.color = "var(--green)";
-  } else if (average >= 4) {
+  } else if (latestAverage >= 4) {
     badge.textContent = "存在漏洞";
     badge.style.background = "var(--amber-2)";
     badge.style.color = "var(--amber)";
@@ -469,6 +721,73 @@ function addMessage(role, title, body) {
   `;
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function updateMessageBody(message, body) {
+  if (!message) return;
+  const target = message.querySelector("p");
+  if (target) target.textContent = body;
+  $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
+}
+
+async function saveMessage(role, round, content, meta = {}) {
+  if (!state.sessionId) return;
+  try {
+    await apiRequest(`/api/sessions/${state.sessionId}/message`, {
+      method: "POST",
+      body: JSON.stringify({ role, round, content, meta })
+    });
+  } catch (error) {
+    console.warn("save message failed:", error);
+  }
+}
+
+async function createSessionSnapshot(projectText, track, intensity, feedbackMode, jdKeywords, focusText) {
+  const interviewerStyle = $("#interviewerStyle").value;
+  const data = await apiRequest("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      title: makeSessionTitle(projectText),
+      track,
+      intensity,
+      feedbackMode,
+      projectText,
+      jdKeywords,
+      focusText,
+      facts: state.facts,
+      scores: state.scores,
+      risks: state.risks
+    })
+  });
+  state.sessionId = data.session.id;
+  state.sessionTitle = data.session.title;
+  await loadHistory();
+}
+
+async function saveSessionState(status = "active", extraReport = {}) {
+  if (!state.sessionId) return;
+  try {
+    await apiRequest(`/api/sessions/${state.sessionId}/state`, {
+      method: "POST",
+      body: JSON.stringify({
+        status,
+        facts: state.facts,
+        scores: state.scores,
+        risks: state.risks,
+        report: {
+          answers: state.answers,
+          feedbackItems: state.feedbackItems,
+          questions: state.questions,
+          round: state.round,
+          ...extraReport
+        }
+      })
+    });
+    await loadHistory();
+  } catch (error) {
+    console.warn("save session state failed:", error);
+  }
 }
 
 function stopTimer() {
@@ -508,7 +827,7 @@ function updateTimer() {
   }
 }
 
-function askNextQuestion() {
+async function askNextQuestion() {
   if (state.round >= state.maxSafetyRounds || state.round >= state.questions.length) {
     finishSession();
     return;
@@ -518,6 +837,7 @@ function askNextQuestion() {
   const timeLimit = questionTimeLimit(question);
   renderCurrentQuestion(question);
   addMessage("system", `第 ${state.round + 1} 轮追问 · 建议 ${formatDuration(timeLimit)}`, text);
+  await saveMessage("interviewer", state.round + 1, text, { timeLimitSeconds: timeLimit, question });
   $("#roundCounter").textContent = `${state.round + 1}`;
   $("#answerInput").value = "";
   $("#answerInput").disabled = false;
@@ -528,8 +848,10 @@ function askNextQuestion() {
 }
 
 async function startSession() {
+  if (!ensureLoggedIn()) return;
   const track = $("#track").value;
   const intensity = $("#intensity").value;
+  const interviewerStyle = $("#interviewerStyle").value;
   const feedbackMode = $("#feedbackMode").value;
   const projectText = $("#projectText").value.trim();
   const jdKeywords = $("#jdKeywords").value.trim();
@@ -549,9 +871,12 @@ async function startSession() {
   stopTimer();
   state.activeDeadline = null;
   state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
   state.risks = [];
   state.facts = extractFacts(projectText, track, jdKeywords, focusText);
   state.questions = buildQuestions(track, intensity, state.facts);
+  state.sessionId = null;
+  state.sessionTitle = "";
 
   $("#chatLog").innerHTML = "";
   $("#sessionStatus").textContent = "训练中";
@@ -568,9 +893,12 @@ async function startSession() {
   $("#sessionStatus").textContent = "生成追问";
 
   try {
+    await createSessionSnapshot(projectText, track, intensity, feedbackMode, jdKeywords, focusText);
     const ai = await requestAI("questions", {
+      sessionId: state.sessionId,
       track: state.facts.profile.label,
       intensity,
+      interviewerStyle,
       projectText,
       jdKeywords,
       focusText,
@@ -584,11 +912,16 @@ async function startSession() {
       state.questions = normalizeQuestions(ai.questions);
     }
   } catch (error) {
-    console.warn("AI questions fallback:", error);
+    console.warn("AI questions/session fallback:", error);
+    if (!state.sessionId) {
+      alert(`无法创建模拟记录：${error.message}`);
+      resetSession();
+      return;
+    }
   }
 
   $("#sessionStatus").textContent = "训练中";
-  askNextQuestion();
+  await askNextQuestion();
 }
 
 async function submitAnswer(event) {
@@ -607,10 +940,13 @@ async function submitAnswer(event) {
   const currentQuestionText = questionText(question);
   addMessage("user", `回答 ${state.round + 1}`, answer);
   state.answers.push({ question: currentQuestionText, timeLimitSeconds: questionTimeLimit(question), answer });
+  await saveMessage("candidate", state.round + 1, answer, { question: currentQuestionText, timeLimitSeconds: questionTimeLimit(question) });
 
   const scores = scoreAnswer(answer);
   let finalScores = scores;
   let diagnosis = diagnoseAnswer(answer, question);
+  const localRelevance = assessAnswerRelevance(answer, currentQuestionText);
+  if (localRelevance.score <= 4) diagnosis.unshift(`没有正面回答问题：${localRelevance.evidence}`);
   let structuredFeedback = null;
   let shouldEnd = false;
   let endReason = "";
@@ -620,11 +956,14 @@ async function submitAnswer(event) {
 
   try {
     const ai = await requestAgentStep({
+      sessionId: state.sessionId,
       facts: state.facts,
+      interviewerStyle: $("#interviewerStyle").value,
       question: currentQuestionText,
       timeLimitSeconds: questionTimeLimit(question),
       answer,
       previousRounds: state.answers.slice(0, -1),
+      previousFeedback: state.feedbackItems.slice(-3),
       currentRound: state.round + 1,
       maxSafetyRounds: state.maxSafetyRounds,
       currentScores: state.scores,
@@ -633,7 +972,10 @@ async function submitAnswer(event) {
     if (Array.isArray(ai.diagnosis) && ai.diagnosis.length) {
       diagnosis = ai.diagnosis.slice(0, 5);
     }
-    structuredFeedback = normalizeFeedback(ai.feedback, diagnosis);
+    structuredFeedback = normalizeFeedback({
+      ...(ai.feedback || {}),
+      answer_relevance: ai.answer_relevance || ai.feedback?.answer_relevance
+    }, diagnosis);
     if (ai.scores) {
       finalScores = {
         authenticity: clampScore(ai.scores.authenticity, scores.authenticity),
@@ -652,16 +994,24 @@ async function submitAnswer(event) {
     console.warn("AI agent fallback:", error);
   }
 
-  if (!structuredFeedback) structuredFeedback = normalizeFeedback(null, diagnosis);
+  if (!structuredFeedback) structuredFeedback = normalizeFeedback({
+    answer_relevance: localRelevance
+  }, diagnosis);
+  if (structuredFeedback.answer_relevance.verdict.startsWith("未评估")) {
+    structuredFeedback.answer_relevance = localRelevance;
+  }
   state.feedbackItems.push({
     round: state.round + 1,
     question: currentQuestionText,
     answer,
+    scores: { ...finalScores },
+    averageScore: scoreAverage(finalScores),
     ...structuredFeedback
   });
 
   mergeScores(finalScores);
   state.risks.push(...diagnosis.filter((item) => !item.includes("比较扎实")));
+  await saveMessage("feedback", state.round + 1, structuredFeedback.pain_point, structuredFeedback);
 
   if (state.feedbackMode === "realtime") {
     renderLatestFeedback(structuredFeedback);
@@ -673,17 +1023,18 @@ async function submitAnswer(event) {
   state.round += 1;
   $("#roundCounter").textContent = `${state.round}`;
   renderReport();
+  await saveSessionState("active");
 
   if (shouldEnd) {
     finishSession(endReason);
   } else if (state.round >= state.maxSafetyRounds) {
-    finishSession();
+    finishSession("已达到 10 轮安全上限，系统主动收束。");
   } else {
     if (!state.questions[state.round]) {
       const fallback = buildQuestions($("#track").value, $("#intensity").value, state.facts)[state.round] || commonQuestions[3];
       state.questions[state.round] = normalizeQuestion(fallback);
     }
-    setTimeout(askNextQuestion, 280);
+    setTimeout(() => askNextQuestion(), 280);
   }
 }
 
@@ -699,14 +1050,16 @@ function renderReport() {
     report.innerHTML = `
       <article>
         <h3>抗拷问报告</h3>
-        <p>完成至少 3 轮回答后，会生成薄弱点、危险追问和下一轮训练建议。</p>
+        <p>这里是最终复盘区。无论你选择实时反馈还是结束后反馈，每一轮的问题分析、回答分析、是否答到问题、痛点、改进建议和示例回答都会汇总在这里。</p>
+        <p>完成至少 1 轮回答后会先出现逐轮反馈；训练结束后会补充整场总结、高危追问和下一轮训练重点。</p>
       </article>
     `;
     return;
   }
 
   const average = Math.round(Object.values(state.scores).reduce((sum, item) => sum + item, 0) / Object.values(state.scores).length);
-  const uniqueRisks = [...new Set([...state.facts.riskPoints, ...state.risks])].slice(0, 6);
+  const latestAverage = Math.round(Object.values(state.latestScores).reduce((sum, item) => sum + item, 0) / Object.values(state.latestScores).length);
+  const uniqueRisks = [...new Set([...(state.facts?.riskPoints || []), ...state.risks])].slice(0, 6);
   const weakest = Object.entries(state.scores).sort((a, b) => a[1] - b[1])[0][0];
   const adviceMap = {
     authenticity: "补齐个人贡献边界：你亲手实现了什么、改了哪些关键代码、遇到什么具体问题。",
@@ -719,21 +1072,24 @@ function renderReport() {
   report.innerHTML = `
     <article>
       <h3>总览</h3>
+      <p>总览展示整场训练的累计表现；右侧即时诊断展示最近一轮表现。两者用途不同。</p>
       <div class="metric-grid">
         <div class="metric"><strong>${average}</strong><span>抗拷问总分</span></div>
+        <div class="metric"><strong>${latestAverage}</strong><span>最近一轮</span></div>
         <div class="metric"><strong>${state.answers.length}</strong><span>已完成轮次</span></div>
         <div class="metric"><strong>${uniqueRisks.length}</strong><span>危险点</span></div>
-        <div class="metric"><strong>${state.questions.length}</strong><span>题库追问</span></div>
       </div>
     </article>
     <article>
-      <h3>最危险的追问点</h3>
+      <h3>整场高危追问点</h3>
+      <p>这些是面试官最可能继续深挖、也最容易把项目问穿的位置。</p>
       <ul>
         ${uniqueRisks.length ? uniqueRisks.map((item) => `<li>${sanitize(item)}</li>`).join("") : "<li>暂未发现明显高风险点，继续补充细节和指标。</li>"}
       </ul>
     </article>
     <article>
       <h3>下一轮训练重点</h3>
+      <p>下一次练习优先补这些，不要平均用力。</p>
       <ul>
         <li>${adviceMap[weakest]}</li>
         <li>准备一段 90 秒项目介绍：背景、角色、技术路线、结果和反思。</li>
@@ -741,8 +1097,8 @@ function renderReport() {
       </ul>
     </article>
     <article>
-      <h3>更强项目表达模板</h3>
-      <p>我在这个项目里负责「具体模块」，为了解决「明确行业/业务问题」，选择「技术方案」而不是「替代方案」，原因是「取舍」。我用「指标」验证效果，同时处理了「工程风险」。如果企业真实落地，最需要关注「成本/稳定性/合规/用户体验」；如果重做，我会优先改「最薄弱环节」。</p>
+      <h3>项目表达骨架</h3>
+      <p>这不是让你照读，而是提醒你最终需要补齐哪些信息：我负责的具体模块、要解决的问题、为什么选择这个方案、用了什么指标验证、遇到什么工程风险、如果真实落地最担心什么、如果重做优先改哪里。</p>
     </article>
     ${renderFeedbackSummary()}
   `;
@@ -752,10 +1108,13 @@ function renderFeedbackSummary() {
   if (!state.feedbackItems.length) return "";
   return `
     <article>
-      <h3>${state.feedbackMode === "final" ? "逐轮总体反馈" : "逐轮反馈汇总"}</h3>
+      <h3>每轮复盘</h3>
+      <p>${state.feedbackMode === "final" ? "你选择了结束后反馈，所以训练中不会展开评价；所有逐轮反馈会集中出现在这里。" : "你选择了实时反馈，所以右侧会显示最近一轮；这里会保留所有轮次，方便最后整体复盘。"}</p>
       ${state.feedbackItems.map((item) => `
         <div class="feedback-item">
-          <h3>第 ${item.round} 轮</h3>
+          <h3>第 ${item.round} 轮 · 本轮 ${item.averageScore ?? scoreAverage(item.scores)} 分</h3>
+          ${renderScoreMini(item.scores)}
+          <p><strong>是否答到问题：</strong>${sanitize(item.answer_relevance?.verdict || "未评估")}${item.answer_relevance?.evidence ? `：${sanitize(item.answer_relevance.evidence)}` : ""}</p>
           <p><strong>问题分析：</strong>${sanitize(item.question_analysis)}</p>
           <p><strong>回答分析：</strong>${sanitize(item.answer_analysis)}</p>
           <p><strong>痛点：</strong>${sanitize(item.pain_point)}</p>
@@ -768,9 +1127,12 @@ function renderFeedbackSummary() {
 }
 
 async function enrichFinalReport(reason = "") {
+  let reportExtra = { endReason: reason };
   try {
     const ai = await requestAI("report", {
+      sessionId: state.sessionId,
       facts: state.facts,
+      interviewerStyle: $("#interviewerStyle").value,
       answers: state.answers,
       scores: state.scores,
       risks: state.risks,
@@ -778,6 +1140,7 @@ async function enrichFinalReport(reason = "") {
       feedbackItems: state.feedbackItems,
       endReason: reason
     });
+    reportExtra.aiReport = ai;
     const dangerPoints = Array.isArray(ai.danger_points) ? ai.danger_points : [];
     const practicePlan = Array.isArray(ai.practice_plan) ? ai.practice_plan : [];
     const strongerPitch = ai.stronger_pitch || "";
@@ -786,7 +1149,8 @@ async function enrichFinalReport(reason = "") {
 
     $("#reportPanel").innerHTML += `
       <article>
-        <h3>模型复盘</h3>
+        <h3>整场总结</h3>
+        <p>这部分由模型在训练结束后汇总，重点看整场共性问题和下一轮准备方向。</p>
         ${summary ? `<p>${sanitize(summary)}</p>` : ""}
         ${dangerPoints.length ? `<h3>高危追问</h3><ul>${dangerPoints.map((item) => `<li>${sanitize(item)}</li>`).join("")}</ul>` : ""}
         ${practicePlan.length ? `<h3>训练计划</h3><ul>${practicePlan.map((item) => `<li>${sanitize(item)}</li>`).join("")}</ul>` : ""}
@@ -795,10 +1159,14 @@ async function enrichFinalReport(reason = "") {
     `;
   } catch (error) {
     console.warn("AI report fallback:", error);
+  } finally {
+    await saveSessionState(reason === "用户手动终止" ? "stopped" : "ended", reportExtra);
   }
 }
 
 function finishSession(reason = "") {
+  if (!state.started && !state.answers.length) return;
+  state.started = false;
   $("#sessionStatus").textContent = "已生成报告";
   $("#roundCounter").textContent = `${Math.min(state.round, state.maxSafetyRounds)}`;
   $("#answerInput").disabled = true;
@@ -811,8 +1179,18 @@ function finishSession(reason = "") {
   if (!$("#chatLog").dataset.finished) {
     const message = reason ? `这一轮项目拷问结束。结束原因：${reason}` : "这一轮项目拷问结束。现在去报告页看最危险的追问点和下一轮训练重点。";
     addMessage("system", "训练结束", message);
+    saveMessage("system", state.round, message, { reason });
     $("#chatLog").dataset.finished = "true";
   }
+}
+
+function stopInterview() {
+  if (!state.started || !state.answers.length) {
+    alert("至少完成一轮回答后，才能终止并生成报告。");
+    return;
+  }
+  finishSession("用户手动终止");
+  switchTab("report");
 }
 
 function resetSession() {
@@ -824,9 +1202,12 @@ function resetSession() {
   state.risks = [];
   state.feedbackMode = $("#feedbackMode").value;
   state.feedbackItems = [];
+  state.sessionId = null;
+  state.sessionTitle = "";
   stopTimer();
   state.activeDeadline = null;
   state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
 
   $("#sessionStatus").textContent = "待开始";
   $("#roundCounter").textContent = "0";
@@ -854,6 +1235,59 @@ function resetSession() {
   switchTab("interview");
 }
 
+function newSimulation() {
+  resetSession();
+  $("#projectText").focus();
+}
+
+async function openHistorySession(sessionId) {
+  try {
+    const data = await apiRequest(`/api/sessions/${sessionId}`);
+    const item = data.session;
+    resetSession();
+    state.sessionId = item.id;
+    state.sessionTitle = item.title;
+    state.facts = item.facts;
+    state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, ...(item.scores || {}) };
+    state.latestScores = state.feedbackItems.length
+      ? { ...state.scores }
+      : { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+    state.risks = item.risks || [];
+    state.feedbackItems = item.report?.feedbackItems || [];
+    state.answers = item.report?.answers || [];
+    state.questions = item.report?.questions || [];
+    state.round = item.report?.round || state.answers.length;
+    $("#track").value = item.track || "general";
+    $("#intensity").value = item.intensity || "normal";
+    $("#interviewerStyle").value = "mixed";
+    $("#feedbackMode").value = item.feedbackMode || "realtime";
+    $("#projectText").value = item.projectText || "";
+    $("#jdKeywords").value = item.jdKeywords || "";
+    $("#focusText").value = item.focusText || "";
+    $("#sessionStatus").textContent = item.status === "active" ? "历史记录" : "历史报告";
+    $("#roundCounter").textContent = `${state.round}`;
+    $("#chatLog").innerHTML = "";
+    (item.messages || []).forEach((message) => {
+      if (message.role === "candidate") addMessage("user", `回答 ${message.round}`, message.content);
+      else if (message.role === "interviewer") addMessage("system", `第 ${message.round} 轮追问`, message.content);
+      else if (message.role === "system") addMessage("system", "训练结束", message.content);
+    });
+    if (!(item.messages || []).length) {
+      $("#chatLog").innerHTML = "<div class=\"empty-state\"><h2>这条历史记录还没有问答内容。</h2><p>可以点击“新模拟”重新开始。</p></div>";
+    }
+    renderFacts();
+    renderScores();
+    renderReport();
+    renderCurrentQuestion(null, "done");
+    $("#answerInput").disabled = true;
+    $("#submitAnswer").disabled = true;
+    $("#answerHint").textContent = "正在查看历史记录。点击“新模拟”开启新对话。";
+    switchTab("report");
+  } catch (error) {
+    alert(`读取历史失败：${error.message}`);
+  }
+}
+
 function switchTab(tabName) {
   $$(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabName));
   $$(".tab-view").forEach((view) => view.classList.remove("active"));
@@ -862,10 +1296,17 @@ function switchTab(tabName) {
 
 $("#startSession").addEventListener("click", startSession);
 $("#resetSession").addEventListener("click", resetSession);
+$("#stopSession").addEventListener("click", stopInterview);
+$("#newSession").addEventListener("click", newSimulation);
+$("#refreshHistory").addEventListener("click", () => loadHistory());
+$("#loginButton").addEventListener("click", () => handleAuth("login").catch((error) => alert(error.message)));
+$("#registerButton").addEventListener("click", () => handleAuth("register").catch((error) => alert(error.message)));
+$("#logoutButton").addEventListener("click", logout);
 $("#answerForm").addEventListener("submit", submitAnswer);
 $("#loadSample").addEventListener("click", () => {
   $("#track").value = "code";
   $("#intensity").value = "senior";
+  $("#interviewerStyle").value = "mixed";
   $("#jdKeywords").value = "代码质量、AI 评审、服务稳定性、Python、评测";
   $("#focusText").value = "代码实现、误报漏报、工程落地、行业趋势";
   $("#projectText").value = sampleProject;
@@ -876,3 +1317,5 @@ $$(".tab").forEach((tab) => {
 });
 
 renderScores();
+renderAuth();
+loadMe();

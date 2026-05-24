@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050" role="img" aria-labelledby="title desc">
+  <title id="title">项目拷问官代码仓库结构图</title>
+  <desc id="desc">展示项目拷问官从前端页面、后端 API、Prompt 与 Skill、DashScope 模型调用到 SQLite 持久化的整体架构。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="58%" stop-color="#eef6f4"/>
+      <stop offset="100%" stop-color="#fff7ed"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-teal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#0f766e"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#b45309"/>
+    </marker>
+    <style>
+      .page { fill: url(#bg); }
+      .title { font: 700 34px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; letter-spacing: 0; }
+      .subtitle { font: 400 16px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .section-title { font: 700 18px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .card-title { font: 700 16px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .body { font: 400 13px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+      .small { font: 400 12px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .mono { font: 500 12px "SFMono-Regular", Consolas, "Liberation Mono", monospace; fill: #334155; }
+      .pill-text { font: 700 12px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; filter: url(#shadow); }
+      .subcard { fill: #f8fafc; stroke: #dbe3ea; stroke-width: 1; }
+      .frontend { stroke: #0891b2; }
+      .backend { stroke: #4f46e5; }
+      .agent { stroke: #d97706; }
+      .data { stroke: #16a34a; }
+      .docs { stroke: #9333ea; }
+      .flow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .flow-teal { stroke: #0f766e; stroke-width: 2.2; fill: none; marker-end: url(#arrow-teal); }
+      .flow-amber { stroke: #b45309; stroke-width: 2.2; fill: none; marker-end: url(#arrow-amber); }
+      .flow-dashed { stroke: #64748b; stroke-width: 2; stroke-dasharray: 8 7; fill: none; marker-end: url(#arrow); }
+      .lane-label { font: 700 12px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="1600" height="1050"/>
+
+  <text class="title" x="60" y="58">项目拷问官：代码仓库结构图</text>
+  <text class="subtitle" x="60" y="88">前端一问一答训练界面，后端统一托管静态资源与 API，Prompt + Skill 驱动模型作为面试 agent，SQLite 保存用户、日志和报告。</text>
+
+  <g transform="translate(60,118)">
+    <rect x="0" y="0" width="224" height="34" rx="17" fill="#ecfeff" stroke="#67e8f9"/>
+    <text class="pill-text" x="18" y="22">1. 输入项目与岗位关键词</text>
+    <rect x="240" y="0" width="172" height="34" rx="17" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text class="pill-text" x="258" y="22">2. 生成事实卡</text>
+    <rect x="428" y="0" width="190" height="34" rx="17" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="pill-text" x="446" y="22">3. Agent 逐轮追问</text>
+    <rect x="634" y="0" width="204" height="34" rx="17" fill="#f0fdf4" stroke="#86efac"/>
+    <text class="pill-text" x="652" y="22">4. 评分、报告、复盘</text>
+  </g>
+
+  <g id="frontend">
+    <rect class="panel frontend" x="60" y="170" width="370" height="665" rx="18"/>
+    <text class="section-title" x="86" y="207">前端 Web 应用</text>
+    <text class="small" x="86" y="230">用户看到的训练台：登录、项目输入、倒计时、聊天、事实卡、报告。</text>
+
+    <rect class="subcard" x="86" y="256" width="318" height="120" rx="12"/>
+    <text class="card-title" x="108" y="283">页面与样式</text>
+    <text class="mono" x="108" y="308">web/index.html</text>
+    <text class="mono" x="108" y="330">web/styles.css</text>
+    <text class="body" x="108" y="353">布局：左侧配置，中心对话，右侧反馈，报告页。</text>
+
+    <rect class="subcard" x="86" y="394" width="318" height="208" rx="12"/>
+    <text class="card-title" x="108" y="421">前端模块</text>
+    <text class="mono" x="108" y="447">state.js</text>
+    <text class="small" x="202" y="447">全局状态、问题归一化</text>
+    <text class="mono" x="108" y="469">api-auth.js</text>
+    <text class="small" x="202" y="469">登录、注册、历史、API 请求</text>
+    <text class="mono" x="108" y="491">domain.js</text>
+    <text class="small" x="202" y="491">事实卡、证据链、趋势卡</text>
+    <text class="mono" x="108" y="513">interview.js</text>
+    <text class="small" x="202" y="513">一问一答、计时、保存、报告</text>
+    <text class="mono" x="108" y="535">scoring.js</text>
+    <text class="small" x="202" y="535">本地评分、时效、相关度门控</text>
+    <text class="mono" x="108" y="557">render.js / main.js</text>
+    <text class="small" x="202" y="557">渲染与事件绑定</text>
+
+    <rect class="subcard" x="86" y="620" width="318" height="164" rx="12"/>
+    <text class="card-title" x="108" y="647">本地兜底与用户体验</text>
+    <text class="body" x="108" y="674">事实抽取、行业趋势卡、证据链拆解</text>
+    <text class="body" x="108" y="699">倒计时 + 文本长度估算口述耗时</text>
+    <text class="body" x="108" y="724">回答相关度判断，跑题时压分并重问</text>
+    <text class="body" x="108" y="749">API 失败时保留回答并提示重试</text>
+  </g>
+
+  <g id="backend">
+    <rect class="panel backend" x="505" y="170" width="430" height="665" rx="18"/>
+    <text class="section-title" x="531" y="207">Python 后端与 API 层</text>
+    <text class="small" x="531" y="230">唯一启动入口，统一托管静态页面、登录、会话、日志和模型代理。</text>
+
+    <rect class="subcard" x="531" y="256" width="378" height="92" rx="12"/>
+    <text class="card-title" x="553" y="283">启动与配置</text>
+    <text class="mono" x="553" y="309">server.py</text>
+    <text class="body" x="650" y="309">ThreadingHTTPServer + init_db()</text>
+    <text class="mono" x="553" y="331">config.yaml / backend/config.py</text>
+
+    <rect class="subcard" x="531" y="366" width="378" height="190" rx="12"/>
+    <text class="card-title" x="553" y="393">路由处理</text>
+    <text class="mono" x="553" y="419">backend/handler.py</text>
+    <text class="body" x="553" y="445">GET /：静态资源 web/</text>
+    <text class="body" x="553" y="469">POST /api/register /api/login /api/logout</text>
+    <text class="body" x="553" y="493">GET /api/sessions；POST /api/sessions</text>
+    <text class="body" x="553" y="517">POST /api/sessions/:id/message 或 state</text>
+    <text class="body" x="553" y="541">POST /api/ai：模型代理与日志记录</text>
+
+    <rect class="subcard" x="531" y="574" width="378" height="128" rx="12"/>
+    <text class="card-title" x="553" y="601">业务支持模块</text>
+    <text class="mono" x="553" y="627">auth.py</text>
+    <text class="small" x="641" y="627">密码哈希、token、用户校验</text>
+    <text class="mono" x="553" y="651">storage.py</text>
+    <text class="small" x="641" y="651">SQLite 表结构、会话、消息、AI 日志</text>
+    <text class="mono" x="553" y="675">http_utils.py</text>
+    <text class="small" x="641" y="675">JSON 请求与响应封装</text>
+
+    <rect class="subcard" x="531" y="720" width="378" height="76" rx="12"/>
+    <text class="card-title" x="553" y="747">模型调用封装</text>
+    <text class="mono" x="553" y="773">ai.py</text>
+    <text class="body" x="620" y="773">构造 OpenAI 兼容请求，要求 JSON 输出。</text>
+  </g>
+
+  <g id="agent">
+    <rect class="panel agent" x="1010" y="170" width="530" height="410" rx="18"/>
+    <text class="section-title" x="1036" y="207">面试 Agent：Prompt + Skill + 模型</text>
+    <text class="small" x="1036" y="230">后端把任务上下文、prompt 和技能包合成结构化请求，交给 DashScope 返回 JSON。</text>
+
+    <rect class="subcard" x="1036" y="256" width="224" height="202" rx="12"/>
+    <text class="card-title" x="1058" y="283">Prompt 任务</text>
+    <text class="mono" x="1058" y="310">prompts/system.md</text>
+    <text class="body" x="1058" y="334">全局面试官原则</text>
+    <text class="mono" x="1058" y="360">questions.md</text>
+    <text class="body" x="1058" y="384">首轮问题与候选问题</text>
+    <text class="mono" x="1058" y="410">agent_step.md</text>
+    <text class="body" x="1058" y="434">下一步追问、评分、结束判断</text>
+
+    <rect class="subcard" x="1284" y="256" width="230" height="202" rx="12"/>
+    <text class="card-title" x="1306" y="283">Skill 知识包</text>
+    <text class="mono" x="1306" y="310">skills/core/</text>
+    <text class="body" x="1306" y="334">事实卡、追问轴、评分 rubric</text>
+    <text class="mono" x="1306" y="360">skills/tracks/</text>
+    <text class="body" x="1306" y="384">AI、后端、前端、机器人等方向</text>
+    <text class="mono" x="1306" y="410">skills/agent/</text>
+    <text class="body" x="1306" y="434">压力阶梯与决策策略</text>
+
+    <rect class="subcard" x="1036" y="480" width="478" height="62" rx="12"/>
+    <text class="card-title" x="1058" y="507">DashScope / Qwen 模型</text>
+    <text class="body" x="1058" y="531">输出 first_question、next_probe、scores、feedback、report，全部按 JSON schema 解析。</text>
+  </g>
+
+  <g id="data">
+    <rect class="panel data" x="1010" y="622" width="530" height="213" rx="18"/>
+    <text class="section-title" x="1036" y="659">数据持久化与调试日志</text>
+    <text class="small" x="1036" y="682">所有用户训练记录保存在本地 SQLite，便于用户复盘和开发者调试模型行为。</text>
+
+    <rect class="subcard" x="1036" y="708" width="478" height="88" rx="12"/>
+    <text class="mono" x="1058" y="736">data/interrogator.sqlite3</text>
+    <text class="body" x="1058" y="763">users / auth_sessions / interview_sessions / interview_messages / ai_logs</text>
+    <text class="small" x="1058" y="785">记录账号、会话快照、每轮消息、最终报告、prompt、模型返回和错误。</text>
+  </g>
+
+  <g id="docs">
+    <rect class="panel docs" x="60" y="878" width="1480" height="112" rx="18"/>
+    <text class="section-title" x="86" y="916">项目说明、测试材料与提交资产</text>
+    <text class="mono" x="86" y="946">README.md</text>
+    <text class="body" x="190" y="946">运行方式、技术栈、核心功能、评分与使用流程</text>
+    <text class="mono" x="620" y="946">Memo.md</text>
+    <text class="body" x="700" y="946">目标用户、产品取舍、迭代记录、下一步设计</text>
+    <text class="mono" x="1062" y="946">examples/</text>
+    <text class="body" x="1162" y="946">代码项目、风控模型、后端系统、Robotics + VLM 测试案例</text>
+    <text class="small" x="86" y="971">这些文件帮助评审快速理解项目边界，也帮助开发者复现典型训练流程。</text>
+  </g>
+
+  <g id="arrows">
+    <path class="flow-teal" d="M430 470 C466 470, 466 470, 505 470"/>
+    <text class="lane-label" x="446" y="456">fetch API</text>
+
+    <path class="flow" d="M720 348 C720 360, 720 360, 720 366"/>
+    <path class="flow" d="M720 556 C720 566, 720 566, 720 574"/>
+    <path class="flow-amber" d="M935 755 C970 755, 970 520, 1010 520"/>
+    <text class="lane-label" x="948" y="641">/api/ai</text>
+
+    <path class="flow-amber" d="M1275 542 C1275 578, 1275 585, 1275 622"/>
+    <text class="lane-label" x="1290" y="594">JSON 结果</text>
+
+    <path class="flow" d="M935 468 C970 468, 970 728, 1010 728"/>
+    <text class="lane-label" x="948" y="706">会话与日志</text>
+
+    <path class="flow-teal" d="M1010 520 C964 520, 964 620, 909 620"/>
+    <text class="lane-label" x="923" y="600">反馈返回前端</text>
+
+    <path class="flow-dashed" d="M620 878 C620 838, 620 837, 620 796"/>
+    <text class="lane-label" x="635" y="856">文档说明代码结构</text>
+
+    <path class="flow-dashed" d="M1284 878 C1284 858, 1284 854, 1284 835"/>
+    <text class="lane-label" x="1300" y="858">案例用于测试</text>
+  </g>
+
+  <g id="legend" transform="translate(1160,52)">
+    <rect x="0" y="0" width="380" height="82" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+    <line x1="22" y1="24" x2="82" y2="24" class="flow-teal"/>
+    <text class="small" x="96" y="28">浏览器 API 请求</text>
+    <line x1="22" y1="48" x2="82" y2="48" class="flow-amber"/>
+    <text class="small" x="96" y="52">模型 agent 调用链路</text>
+    <line x1="214" y1="24" x2="274" y2="24" class="flow"/>
+    <text class="small" x="288" y="28">数据保存</text>
+    <line x1="214" y1="48" x2="274" y2="48" class="flow-dashed"/>
+    <text class="small" x="288" y="52">配置/说明/案例</text>
+  </g>
+</svg>

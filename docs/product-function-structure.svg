@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+  <title id="title">项目拷问官功能结构图</title>
+  <desc id="desc">展示项目拷问官从用户输入到项目理解、AI 面试官追问、评分反馈、报告复盘和训练有效性指标的产品功能结构。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="48%" stop-color="#f1f9f7"/>
+      <stop offset="100%" stop-color="#fff8ed"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-teal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#0f766e"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#b45309"/>
+    </marker>
+    <style>
+      .page { fill: url(#bg); }
+      .title { font: 700 36px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; letter-spacing: 0; }
+      .subtitle { font: 400 16px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.1; filter: url(#shadow); }
+      .module { fill: #f8fafc; stroke: #dbe3ea; stroke-width: 1; }
+      .center { fill: #0f172a; }
+      .center-text { font: 700 24px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #ffffff; }
+      .center-sub { font: 400 13px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #cbd5e1; }
+      .section-title { font: 700 18px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .card-title { font: 700 15px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .body { font: 400 13px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+      .small { font: 400 12px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .tag { font: 700 11px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .flow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .flow-teal { stroke: #0f766e; stroke-width: 2.4; fill: none; marker-end: url(#arrow-teal); }
+      .flow-amber { stroke: #b45309; stroke-width: 2.4; fill: none; marker-end: url(#arrow-amber); }
+      .flow-loop { stroke: #64748b; stroke-width: 2; stroke-dasharray: 8 7; fill: none; marker-end: url(#arrow); }
+      .num { font: 700 15px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #ffffff; }
+      .legend { font: 700 12px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1600" height="1080"/>
+  <text class="title" x="60" y="58">项目拷问官：功能结构图</text>
+  <text class="subtitle" x="60" y="88">不是通用 AI 面试官，而是围绕“简历项目是否经得住连续追问”的项目深挖训练闭环。</text>
+
+  <g transform="translate(1165,46)">
+    <rect x="0" y="0" width="375" height="86" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+    <line x1="22" y1="25" x2="86" y2="25" class="flow-teal"/>
+    <text class="legend" x="100" y="29">用户训练主流程</text>
+    <line x1="22" y1="53" x2="86" y2="53" class="flow-amber"/>
+    <text class="legend" x="100" y="57">AI agent 决策与追问</text>
+    <line x1="230" y1="25" x2="294" y2="25" class="flow-loop"/>
+    <text class="legend" x="306" y="29">复盘沉淀</text>
+  </g>
+
+  <g id="center">
+    <rect class="center" x="595" y="390" width="410" height="174" rx="28"/>
+    <text class="center-text" x="640" y="445">项目抗拷问训练闭环</text>
+    <text class="center-sub" x="640" y="476">输入一个项目，围绕证据链逐轮追问</text>
+    <text class="center-sub" x="640" y="500">用评分、时限、报告帮助用户补漏洞</text>
+    <rect x="640" y="522" width="118" height="28" rx="14" fill="#14b8a6"/>
+    <text class="tag" x="659" y="540">一问一答</text>
+    <rect x="772" y="522" width="106" height="28" rx="14" fill="#f59e0b"/>
+    <text class="tag" x="792" y="540">动态追问</text>
+    <rect x="892" y="522" width="88" height="28" rx="14" fill="#a78bfa"/>
+    <text class="tag" x="914" y="540">复盘</text>
+  </g>
+
+  <g id="input">
+    <rect class="panel" x="60" y="166" width="378" height="302" rx="20"/>
+    <circle cx="92" cy="200" r="17" fill="#0891b2"/>
+    <text class="num" x="87" y="206">1</text>
+    <text class="section-title" x="120" y="207">用户入口与模拟配置</text>
+    <text class="small" x="86" y="234">让每次训练绑定到一个用户和一次可回放的模拟。</text>
+
+    <rect class="module" x="86" y="260" width="326" height="72" rx="12"/>
+    <text class="card-title" x="108" y="286">账号与历史</text>
+    <text class="body" x="108" y="311">注册 / 登录、历史模拟、开启新模拟</text>
+
+    <rect class="module" x="86" y="348" width="326" height="84" rx="12"/>
+    <text class="card-title" x="108" y="374">训练参数</text>
+    <text class="body" x="108" y="399">技术方向、面试强度、面试官风格、反馈模式</text>
+    <text class="small" x="108" y="421">强度、风格、反馈模式可在下一问生效</text>
+  </g>
+
+  <g id="project-understanding">
+    <rect class="panel" x="60" y="548" width="378" height="340" rx="20"/>
+    <circle cx="92" cy="582" r="17" fill="#0f766e"/>
+    <text class="num" x="87" y="588">2</text>
+    <text class="section-title" x="120" y="589">项目理解与风险拆解</text>
+    <text class="small" x="86" y="616">面试官先读懂项目，再决定从哪里切入。</text>
+
+    <rect class="module" x="86" y="642" width="326" height="72" rx="12"/>
+    <text class="card-title" x="108" y="668">项目事实卡</text>
+    <text class="body" x="108" y="693">技术方向、岗位关键词、缺失信息、高危追问点</text>
+
+    <rect class="module" x="86" y="730" width="326" height="74" rx="12"/>
+    <text class="card-title" x="108" y="756">证据链拷问图</text>
+    <text class="body" x="108" y="781">主张 -> 需要证据 -> 风险点</text>
+
+    <rect class="module" x="86" y="820" width="326" height="44" rx="12"/>
+    <text class="card-title" x="108" y="847">行业趋势追问卡</text>
+  </g>
+
+  <g id="agent">
+    <rect class="panel" x="545" y="166" width="510" height="180" rx="20"/>
+    <circle cx="577" cy="200" r="17" fill="#d97706"/>
+    <text class="num" x="572" y="206">3</text>
+    <text class="section-title" x="605" y="207">AI 面试官 Agent</text>
+    <text class="small" x="571" y="234">根据项目、历史问答和评分，决定继续追、收窄、重问或结束。</text>
+
+    <rect class="module" x="571" y="260" width="144" height="58" rx="12"/>
+    <text class="card-title" x="594" y="285">问题生成</text>
+    <text class="small" x="594" y="306">首问 + 候选追问</text>
+
+    <rect class="module" x="735" y="260" width="144" height="58" rx="12"/>
+    <text class="card-title" x="758" y="285">压力阶梯</text>
+    <text class="small" x="758" y="306">加压 / 收窄 / 重答</text>
+
+    <rect class="module" x="899" y="260" width="130" height="58" rx="12"/>
+    <text class="card-title" x="922" y="285">结束判断</text>
+    <text class="small" x="922" y="306">10 轮内收束</text>
+  </g>
+
+  <g id="interview">
+    <rect class="panel" x="545" y="612" width="510" height="276" rx="20"/>
+    <circle cx="577" cy="646" r="17" fill="#4f46e5"/>
+    <text class="num" x="572" y="652">4</text>
+    <text class="section-title" x="605" y="653">一问一答训练过程</text>
+    <text class="small" x="571" y="680">核心体验是逐步深入，而不是一次生成一串题。</text>
+
+    <rect class="module" x="571" y="706" width="216" height="70" rx="12"/>
+    <text class="card-title" x="593" y="732">真人式追问</text>
+    <text class="body" x="593" y="756">一个核心问题 + 必要追问，不堆题</text>
+
+    <rect class="module" x="813" y="706" width="216" height="70" rx="12"/>
+    <text class="card-title" x="835" y="732">时间压力</text>
+    <text class="body" x="835" y="756">建议回答时长、倒计时、超时扣分</text>
+
+    <rect class="module" x="571" y="792" width="216" height="70" rx="12"/>
+    <text class="card-title" x="593" y="818">回答保存</text>
+    <text class="body" x="593" y="842">每轮问题、回答、耗时进入记录</text>
+
+    <rect class="module" x="813" y="792" width="216" height="70" rx="12"/>
+    <text class="card-title" x="835" y="818">异常兜底</text>
+    <text class="body" x="835" y="842">保存失败可重试，API 失败有本地规则</text>
+  </g>
+
+  <g id="feedback">
+    <rect class="panel" x="1162" y="166" width="378" height="356" rx="20"/>
+    <circle cx="1194" cy="200" r="17" fill="#9333ea"/>
+    <text class="num" x="1189" y="206">5</text>
+    <text class="section-title" x="1222" y="207">评分与反馈系统</text>
+    <text class="small" x="1188" y="234">不只说“好不好”，而是指出具体缺口和更强答案。</text>
+
+    <rect class="module" x="1188" y="260" width="326" height="88" rx="12"/>
+    <text class="card-title" x="1210" y="286">六维候选人评分</text>
+    <text class="body" x="1210" y="311">真实性、技术深度、指标意识、工程落地</text>
+    <text class="body" x="1210" y="333">趋势判断、表达效率</text>
+
+    <rect class="module" x="1188" y="364" width="326" height="70" rx="12"/>
+    <text class="card-title" x="1210" y="390">回答相关度门控</text>
+    <text class="body" x="1210" y="414">答非所问时压低分数，并要求回到本题</text>
+
+    <rect class="module" x="1188" y="450" width="326" height="46" rx="12"/>
+    <text class="card-title" x="1210" y="478">实时反馈 / 结束后统一反馈</text>
+  </g>
+
+  <g id="report">
+    <rect class="panel" x="1162" y="588" width="378" height="300" rx="20"/>
+    <circle cx="1194" cy="622" r="17" fill="#16a34a"/>
+    <text class="num" x="1189" y="628">6</text>
+    <text class="section-title" x="1222" y="629">复盘报告与训练增益</text>
+    <text class="small" x="1188" y="656">把每次面试沉淀成下一次可改的材料。</text>
+
+    <rect class="module" x="1188" y="682" width="326" height="76" rx="12"/>
+    <text class="card-title" x="1210" y="708">逐轮报告</text>
+    <text class="body" x="1210" y="733">问题分析、回答分析、痛点、改进、示例回答</text>
+
+    <rect class="module" x="1188" y="774" width="326" height="76" rx="12"/>
+    <text class="card-title" x="1210" y="800">整场总结</text>
+    <text class="body" x="1210" y="825">最终总分、高危追问、训练计划、更强表达</text>
+  </g>
+
+  <g id="metrics">
+    <rect class="panel" x="60" y="930" width="1480" height="96" rx="20"/>
+    <text class="section-title" x="86" y="966">工具本身有效性指标</text>
+    <text class="small" x="86" y="991">用来回答“这个 AI 面试官是否真的有效”，而不只是给候选人打分。</text>
+    <rect x="405" y="950" width="140" height="36" rx="18" fill="#ecfeff" stroke="#67e8f9"/>
+    <text class="tag" x="431" y="972">问题相关度</text>
+    <rect x="565" y="950" width="140" height="36" rx="18" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="tag" x="591" y="972">追问深度</text>
+    <rect x="725" y="950" width="140" height="36" rx="18" fill="#f5f3ff" stroke="#c4b5fd"/>
+    <text class="tag" x="751" y="972">诊断准确度</text>
+    <rect x="885" y="950" width="140" height="36" rx="18" fill="#f0fdf4" stroke="#86efac"/>
+    <text class="tag" x="912" y="972">训练增益</text>
+    <rect x="1045" y="950" width="150" height="36" rx="18" fill="#fef2f2" stroke="#fecaca"/>
+    <text class="tag" x="1070" y="972">用户复盘价值</text>
+  </g>
+
+  <g id="arrows">
+    <path class="flow-teal" d="M438 316 C486 316, 486 278, 545 278"/>
+    <path class="flow-teal" d="M249 468 C249 506, 249 510, 249 548"/>
+    <path class="flow-teal" d="M438 718 C500 718, 500 748, 545 748"/>
+    <path class="flow-amber" d="M800 346 C800 370, 800 370, 800 390"/>
+    <path class="flow-amber" d="M1005 477 C1065 477, 1094 348, 1162 348"/>
+    <path class="flow-teal" d="M1055 748 C1096 748, 1108 738, 1162 738"/>
+    <path class="flow-loop" d="M1162 794 C1050 918, 602 918, 428 810"/>
+    <text class="small" x="720" y="912">历史复盘反向指导下一次项目表达和答题策略</text>
+    <path class="flow-loop" d="M1351 888 C1351 906, 1351 912, 1351 930"/>
+    <path class="flow-loop" d="M800 888 C800 912, 800 916, 800 930"/>
+  </g>
+
+  <g id="mvp" transform="translate(547,105)">
+    <rect x="0" y="0" width="506" height="36" rx="18" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="small" x="22" y="23">MVP 边界：不做完整简历解析，不绑定单个公司，不优先做语音视频；先把项目深挖闭环做扎实。</text>
+  </g>
+</svg>

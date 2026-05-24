@@ -15,9 +15,9 @@ def dashscope_body(messages, temperature=None):
 
 
 def dashscope_request(body):
-    api_key = str(config_get("dashscope", "api_key", "DASHSCOPE_API_KEY", "")).strip()
+    api_key = str(config_get("dashscope", "api_key", "")).strip()
     if not api_key:
-        raise RuntimeError("DASHSCOPE_API_KEY is not set")
+        raise RuntimeError("dashscope.api_key is not set in config.yaml")
 
     return urllib.request.Request(
         DASHSCOPE_URL,

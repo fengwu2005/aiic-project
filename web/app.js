@@ -15,14 +15,16 @@ const state = {
     depth: 0,
     metrics: 0,
     engineering: 0,
-    industry: 0
+    industry: 0,
+    time: 0
   },
   latestScores: {
     authenticity: 0,
     depth: 0,
     metrics: 0,
     engineering: 0,
-    industry: 0
+    industry: 0,
+    time: 0
   },
   risks: [],
   authToken: localStorage.getItem("projectInterrogatorToken") || "",
@@ -472,8 +474,31 @@ function scoreAnswer(answer) {
     depth: Math.min(10, lengthScore + depth + concrete),
     metrics: Math.min(10, lengthScore + metrics),
     engineering: Math.min(10, lengthScore + engineering),
-    industry: Math.min(10, lengthScore + industry)
+    industry: Math.min(10, lengthScore + industry),
+    time: 8
   };
+}
+
+function scoreTimeEfficiency(elapsedSeconds, limitSeconds, answer) {
+  if (!elapsedSeconds || !limitSeconds) return 7;
+  const ratio = elapsedSeconds / limitSeconds;
+  const tooShort = answer.length < 80;
+  if (ratio <= 0.35 && tooShort) return 4;
+  if (ratio <= 0.75) return 9;
+  if (ratio <= 1) return 8;
+  if (ratio <= 1.2) return 6;
+  if (ratio <= 1.5) return 4;
+  return 2;
+}
+
+function timeEfficiencyNote(elapsedSeconds, limitSeconds) {
+  if (!elapsedSeconds || !limitSeconds) return "未记录实际答题时长。";
+  const ratio = elapsedSeconds / limitSeconds;
+  if (ratio <= 0.35) return "回答很快，若信息不足会显得没有展开。";
+  if (ratio <= 1) return "答题节奏基本合适。";
+  if (ratio <= 1.2) return "略超建议时长，真实面试中需要更快收束。";
+  if (ratio <= 1.5) return "明显超时，容易影响面试官耐心和追问节奏。";
+  return "严重超时，真实面试中会显著扣分。";
 }
 
 function diagnoseAnswer(answer, question) {
@@ -547,12 +572,14 @@ function mergeScores(next) {
       next.metrics = Math.min(next.metrics, 3);
       next.engineering = Math.min(next.engineering, 3);
       next.industry = Math.min(next.industry, 3);
+      next.time = Math.min(next.time, 5);
     } else if (lastFeedback.answer_relevance?.score <= 6) {
       next.authenticity = Math.min(next.authenticity, 5);
       next.depth = Math.min(next.depth, 5);
       next.metrics = Math.min(next.metrics, 5);
       next.engineering = Math.min(next.engineering, 5);
       next.industry = Math.min(next.industry, 5);
+      next.time = Math.min(next.time, 7);
     }
   }
   state.latestScores = { ...next };
@@ -574,7 +601,8 @@ function renderScoreMini(scores) {
     ["depth", "技术深度"],
     ["metrics", "指标意识"],
     ["engineering", "工程落地"],
-    ["industry", "趋势判断"]
+    ["industry", "趋势判断"],
+    ["time", "表达效率"]
   ];
   const safeScores = scores || {};
   return `
@@ -643,7 +671,8 @@ function renderScores() {
     ["depth", "技术深度"],
     ["metrics", "指标意识"],
     ["engineering", "工程落地"],
-    ["industry", "趋势判断"]
+    ["industry", "趋势判断"],
+    ["time", "表达效率"]
   ];
   $("#scoreStack").innerHTML = rows.map(([key, label]) => `
     <div class="score-row">
@@ -870,8 +899,8 @@ async function startSession() {
   state.feedbackItems = [];
   stopTimer();
   state.activeDeadline = null;
-  state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
-  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+  state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
+  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
   state.risks = [];
   state.facts = extractFacts(projectText, track, jdKeywords, focusText);
   state.questions = buildQuestions(track, intensity, state.facts);
@@ -938,11 +967,16 @@ async function submitAnswer(event) {
   stopTimer();
   const question = state.questions[state.round];
   const currentQuestionText = questionText(question);
+  const timeLimitSeconds = questionTimeLimit(question);
+  const elapsedSeconds = state.activeDeadline
+    ? Math.max(1, Math.round((Date.now() - (state.activeDeadline - timeLimitSeconds * 1000)) / 1000))
+    : 0;
   addMessage("user", `回答 ${state.round + 1}`, answer);
-  state.answers.push({ question: currentQuestionText, timeLimitSeconds: questionTimeLimit(question), answer });
-  await saveMessage("candidate", state.round + 1, answer, { question: currentQuestionText, timeLimitSeconds: questionTimeLimit(question) });
+  state.answers.push({ question: currentQuestionText, timeLimitSeconds, elapsedSeconds, answer });
+  await saveMessage("candidate", state.round + 1, answer, { question: currentQuestionText, timeLimitSeconds, elapsedSeconds });
 
   const scores = scoreAnswer(answer);
+  scores.time = scoreTimeEfficiency(elapsedSeconds, timeLimitSeconds, answer);
   let finalScores = scores;
   let diagnosis = diagnoseAnswer(answer, question);
   const localRelevance = assessAnswerRelevance(answer, currentQuestionText);
@@ -960,7 +994,9 @@ async function submitAnswer(event) {
       facts: state.facts,
       interviewerStyle: $("#interviewerStyle").value,
       question: currentQuestionText,
-      timeLimitSeconds: questionTimeLimit(question),
+      timeLimitSeconds,
+      elapsedSeconds,
+      timeEfficiencyNote: timeEfficiencyNote(elapsedSeconds, timeLimitSeconds),
       answer,
       previousRounds: state.answers.slice(0, -1),
       previousFeedback: state.feedbackItems.slice(-3),
@@ -982,7 +1018,8 @@ async function submitAnswer(event) {
         depth: clampScore(ai.scores.depth, scores.depth),
         metrics: clampScore(ai.scores.metrics, scores.metrics),
         engineering: clampScore(ai.scores.engineering, scores.engineering),
-        industry: clampScore(ai.scores.industry, scores.industry)
+        industry: clampScore(ai.scores.industry, scores.industry),
+        time: clampScore(ai.scores.time, scores.time)
       };
     }
     shouldEnd = Boolean(ai.should_end);
@@ -1004,6 +1041,9 @@ async function submitAnswer(event) {
     round: state.round + 1,
     question: currentQuestionText,
     answer,
+    elapsedSeconds,
+    timeLimitSeconds,
+    timeEfficiencyNote: timeEfficiencyNote(elapsedSeconds, timeLimitSeconds),
     scores: { ...finalScores },
     averageScore: scoreAverage(finalScores),
     ...structuredFeedback
@@ -1066,7 +1106,8 @@ function renderReport() {
     depth: "补齐技术取舍：为什么不用更简单的方案，替代方案的成本和收益是什么。",
     metrics: "补齐评估指标：离线指标、线上指标、采集方式、失败样本分析。",
     engineering: "补齐工程闭环：部署、监控、异常、回滚、成本和性能瓶颈。",
-    industry: "补齐行业判断：真实业务场景、企业落地约束、技术趋势和未来变化下的取舍。"
+    industry: "补齐行业判断：真实业务场景、企业落地约束、技术趋势和未来变化下的取舍。",
+    time: "练习表达效率：先给结论，再给两三个关键证据，避免铺垫过长或超时。"
   };
 
   report.innerHTML = `
@@ -1114,6 +1155,7 @@ function renderFeedbackSummary() {
         <div class="feedback-item">
           <h3>第 ${item.round} 轮 · 本轮 ${item.averageScore ?? scoreAverage(item.scores)} 分</h3>
           ${renderScoreMini(item.scores)}
+          <p><strong>答题时长：</strong>${formatDuration(item.elapsedSeconds || 0)} / 建议 ${formatDuration(item.timeLimitSeconds || 0)}。${sanitize(item.timeEfficiencyNote || "")}</p>
           <p><strong>是否答到问题：</strong>${sanitize(item.answer_relevance?.verdict || "未评估")}${item.answer_relevance?.evidence ? `：${sanitize(item.answer_relevance.evidence)}` : ""}</p>
           <p><strong>问题分析：</strong>${sanitize(item.question_analysis)}</p>
           <p><strong>回答分析：</strong>${sanitize(item.answer_analysis)}</p>
@@ -1206,8 +1248,8 @@ function resetSession() {
   state.sessionTitle = "";
   stopTimer();
   state.activeDeadline = null;
-  state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
-  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+  state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
+  state.latestScores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
 
   $("#sessionStatus").textContent = "待开始";
   $("#roundCounter").textContent = "0";
@@ -1248,10 +1290,10 @@ async function openHistorySession(sessionId) {
     state.sessionId = item.id;
     state.sessionTitle = item.title;
     state.facts = item.facts;
-    state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, ...(item.scores || {}) };
+    state.scores = { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0, ...(item.scores || {}) };
     state.latestScores = state.feedbackItems.length
       ? { ...state.scores }
-      : { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0 };
+      : { authenticity: 0, depth: 0, metrics: 0, engineering: 0, industry: 0, time: 0 };
     state.risks = item.risks || [];
     state.feedbackItems = item.report?.feedbackItems || [];
     state.answers = item.report?.answers || [];

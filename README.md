@@ -27,11 +27,24 @@
 
 ```text
 project-interrogator/
+  backend/
+    ai.py                     # 阿里 DashScope 调用
+    auth.py                   # 登录注册和 token 校验
+    config.py                 # 配置读取和路径常量
+    handler.py                # HTTP 路由处理
+    http_utils.py             # JSON 请求/响应工具
+    prompts.py                # Prompt 组装和 skill 加载
+    storage.py                # SQLite 表、会话、日志
+  prompts/
+    system.md                 # 全局系统 prompt
+    questions.md              # 首轮问题生成 prompt
+    agent_step.md             # 面试 agent 决策 prompt
+    report.md                 # 最终报告 prompt
   web/
     index.html                # 前端页面，由 server.py 统一托管
     styles.css                # UI 样式
     app.js                    # 一问一答训练逻辑、本地兜底规则
-  server.py                   # 唯一启动入口，静态资源服务 + 阿里 API 代理
+  server.py                   # 唯一启动入口
   config.yaml                 # API key、模型、端口等配置
   data/                       # 运行时 SQLite 数据库，已加入 .gitignore
   skills/
@@ -145,12 +158,14 @@ data/interrogator.sqlite3
 - 指标意识：是否讲清指标、采集方式、实验/线上评估和失败样本分析
 - 工程落地：是否讲清部署、性能、稳定性、异常、监控、成本和回退
 - 趋势判断：是否理解行业/企业场景、技术发展脉络、落地约束和趋势变化
+- 表达效率：是否在建议时长内先给结论、再给证据、最后收束；明显超时或拖沓会扣分
 
 评分按“每轮评分 + 累计均分”设计：
 
 - 右侧即时诊断显示最近一轮分数，用来判断这一轮回答是否扛得住。
 - 报告里的抗拷问总分是所有已完成轮次的累计均分。
 - 如果本轮回答没有对应问题，各维度会被强制压低；严重跑题时单轮各项最高 3 分。
+- 每轮报告会展示实际答题时长、建议时长、表达效率评价和六个维度的本轮分数。
 
 ## 专业技能包
 
